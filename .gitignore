@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local datasets and generated training artifacts
+smart_bin/datasets/
+smart_bin/runs/
+*.pt
+*.onnx
+
+# Runtime logs and generated plots
+logs/*.csv
+*.png
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example

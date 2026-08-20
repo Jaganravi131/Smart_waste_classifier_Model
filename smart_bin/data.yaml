@@ -1,0 +1,23 @@
+# YOLOv8 dataset configuration for Smart Bin Trash Detection
+# This file is auto-used by train.py
+
+path: ./datasets/trash   # dataset root relative to smart_bin/
+train: images/train
+val:   images/val
+test:  images/test        # optional (if dataset provides it)
+
+# Number of classes
+nc: 6
+
+# Class names — must match your dataset labels exactly
+names:
+  0: cardboard
+  1: glass
+  2: metal
+  3: paper
+  4: plastic
+  5: trash
+
+# NOTE: If you downloaded a different dataset from Roboflow, 
+# the dataset download will auto-generate a data.yaml inside 
+# datasets/trash/ — use that one instead of this file in train.py.
