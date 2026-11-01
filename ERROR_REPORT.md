@@ -13,8 +13,8 @@ different kinds of problem, because they need four different repairs:
 | A | **Integrity** — the model and the figures do not exist | 3 blocking | re-training / re-plotting from real data |
 | B | **ML methodology** — the pipeline cannot answer the questions the report asks | 16 | rebuilding the pipeline |
 | C | **Code defects** — files that crash or do the wrong thing | 15 | code changes (done in this repo) |
-| D | **Hardware & mechanism** — the device as specified cannot work as described | 18 | design changes |
-| E | **Numbers & claims** — arithmetic that a calculator disproves | 23 | editing the report |
+| D | **Hardware & mechanism** — the device as specified cannot work as described | 20 | design changes |
+| E | **Numbers & claims** — arithmetic that a calculator disproves | 24 | editing the report |
 
 Typographical and formatting errors are deliberately **not** listed, as requested.
 Every numeric claim below is machine-checkable:
