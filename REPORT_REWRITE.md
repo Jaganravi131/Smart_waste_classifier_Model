@@ -205,6 +205,36 @@ not (cardboard and paper have recall above precision).
 > `prepare_dataset.py` builds, with biodegradable, electronic and residual all
 > populated - the same metric becomes discriminative and will be *lower*.
 
+> **The gate, as a risk-coverage curve.** Routing accuracy averages over every
+> confidence level, which hides the decision the gate is actually making. Sorting
+> the test items by confidence and accepting only those above a threshold gives the
+> trade-off directly (`tools/calibrate.py`, int8 artefact):
+>
+> | gate τ | coverage | accuracy on accepted | wrong compartment |
+> |---|---|---|---|
+> | 0.40 (shipped) | 99.3 % | 79.21 % | 4.44 % |
+> | 0.50 | 94.4 % | 81.33 % | 3.93 % |
+> | 0.60 | 88.4 % | 84.25 % | 3.15 % |
+> | 0.70 | 81.7 % | 86.36 % | 2.27 % |
+> | 0.80 | 73.3 % | 89.87 % | 1.27 % |
+> | 0.90 | 52.4 % | 95.58 % | 0.44 % |
+>
+> In words: at the shipped setting the bin sorts essentially everything and
+> contaminates 4.4 % of items; holding contamination at or below 1 % requires
+> refusing a third of them (τ = 0.80, coverage 71.7 %, 90.6 % correct on what it
+> accepts). Neither is "the right" operating point - it is a deployment decision
+> about how much contamination a municipal stream tolerates - but it is now a
+> decision with numbers attached rather than a default constant, and it is the
+> honest answer to "why 0.40".
+>
+> **Calibration was tested and rejected.** Softmax output was fitted to the
+> validation split by temperature scaling: the optimum is T = 0.961, and on test it
+> makes ECE slightly *worse* (0.0625 → 0.0716) with NLL unchanged (0.6561 → 0.6582).
+> The shipped softmax is already close to calibrated, so no temperature is applied
+> in the deployed path. The reliability diagram is the left panel of
+> `smart_bin/runs/calibration.png`; the small under-confidence between 0.5 and 0.8
+> is the only visible deviation and it does not survive the confidence intervals.
+
 ### 6.3 Architecture selection — replacement
 
 > Three backbones were trained under an identical protocol — the same split, the
@@ -477,6 +507,7 @@ Replace Table A.I.1 with the files that exist (verify with `git ls-files`):
 | `tools/compare_runs.py` | Python | paired run comparison: Wilson CIs, exact McNemar |
 | `tools/arch_sweep.py` | Python | per-model threshold tuning, then test scoring |
 | `tools/eval_onnx.py` | Python | scores the int8 artefact that actually ships |
+| `tools/calibrate.py` | Python | temperature fit, ECE and the risk-coverage curve |
 | `MODEL_CARD.md` | Markdown | intended use, metrics, limitations, ethics |
 
 **Appendix code listings:** either paste the files verbatim from the repository
@@ -533,6 +564,7 @@ Fix these in the text (working in `tools/verify_report_numbers.py`):
 > python smart_bin/onnx_export.py --int8   # float-vs-deployed agreement
 > python tools/verify_report_numbers.py    # 42 arithmetic checks on this report
 > python tools/smoke_test.py               # 19 end-to-end pipeline checks
+> python tools/calibrate.py               # §6.2 calibration and risk-coverage
 > python tools/robustness_sweep.py --guard # §6.5 degradation study, with the guard
 > python tools/arch_sweep.py arch30_mobilenet_v3_small arch30_resnet18 arch30_efficientnet_b0
 > python tools/plot_arch_compare.py arch30_mobilenet_v3_small arch30_resnet18 arch30_efficientnet_b0

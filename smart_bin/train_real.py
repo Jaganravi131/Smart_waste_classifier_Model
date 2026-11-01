@@ -67,7 +67,9 @@ def make_loader(root: Path, imgsz: int, train: bool, batch: int, workers: int,
     if train and balanced:
         from torch.utils.data import WeightedRandomSampler
 
-        sampler = WeightedRandomSampler(class_weights(dataset), num_samples=len(dataset), replacement=True)
+        weights = class_weights(dataset)
+        assert len(weights) == len(dataset), "balanced sampler needs one weight per image"
+        sampler = WeightedRandomSampler(weights, num_samples=len(dataset), replacement=True)
     return DataLoader(
         dataset,
         batch_size=batch,
@@ -138,11 +140,22 @@ class ModelEma:
 
 
 def class_weights(dataset) -> list[float]:
-    """Inverse-frequency weights, so `trash` (91 images) is not drowned out."""
-    targets = [target for _, target in dataset.samples]
+    """Per-SAMPLE inverse-frequency weights, so `trash` is not drowned out.
+
+    `WeightedRandomSampler` takes one weight per sample, not one per class. Passing
+    the per-class vector (length 6) silently restricts sampling to the first six
+    files: the model memorises them, training accuracy reads 94 % in one epoch and
+    validation collapses to the majority class. Assert the length here - the failure
+    is otherwise invisible until the evaluation.
+    """
+    targets = [int(target) for _, target in dataset.samples]
     counts = np.bincount(targets, minlength=len(dataset.classes)).astype(float)
-    weights = 1.0 / np.clip(counts, 1, None)
-    return (weights / weights.sum() * len(counts)).tolist()
+    per_class = 1.0 / np.clip(counts, 1, None)
+    per_class = per_class / per_class.sum() * len(per_class)
+    weights = [float(per_class[target]) for target in targets]
+    if len(weights) != len(dataset):
+        raise ValueError(f"sampler weights must be per sample: got {len(weights)} for {len(dataset)}")
+    return weights
 
 
 def cosine_with_warmup(step: int, total_steps: int, warmup_steps: int, base_lr: float, min_lr: float) -> float:

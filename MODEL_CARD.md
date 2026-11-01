@@ -105,8 +105,15 @@ interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
    unmeasured; dim light and occlusion have only been *simulated* (limit 6).
 3. Class imbalance: `trash` (91 training images) has the weakest recall, and only
    29 test images support it, so its 51.7 % has a ±17 pp interval.
-4. No calibration on device data. The 0.40 threshold in `fusion.py` is a *deliberate*
-   operating point, not an unexamined default: sweeping it on the validation split
+4. No calibration on *device* data. On the held-out split the int8 softmax is
+   already close to calibrated — temperature scaling fitted on validation finds
+   T = 0.961 and does not improve test ECE (0.0625 → 0.0716), so no temperature is
+   applied. The gate is a deployment choice, not a fixed law: at τ = 0.40 the bin
+   accepts 99.3 % of items with a 4.44 % wrong-compartment rate, at τ = 0.60 it
+   accepts 88.4 % with 3.15 %, and holding contamination at or below 1 % needs
+   τ = 0.80 (71.7 % coverage, 90.6 % correct on what it accepts). Full curve in
+   `smart_bin/runs/calibration.json`. The 0.40 threshold in `fusion.py` is a
+   *deliberate* operating point, not an unexamined default: sweeping it on the validation split
    (`evaluate_real.py --sweep`, or `tools/eval_onnx.py --sweep` for the int8 file)
    shows routing accuracy is flat from 0.20 to 0.35 and falls as the threshold rises,
    because the model is rarely less than 0.40 confident on this data. Lowering it to

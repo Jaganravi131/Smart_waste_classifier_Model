@@ -104,6 +104,7 @@ instead of the from-scratch baseline.
 | `tools/arch_sweep.py` | tunes each model's routing threshold on val, then scores test |
 | `tools/plot_arch_compare.py` | validation curves of several runs, by epoch and by CPU-minute |
 | `tools/robustness_sweep.py` | accuracy under simulated dim light, blur, noise, occlusion, tilt |
+| `tools/calibrate.py` | reliability diagram and risk-coverage curve for the gate |
 | `smart_bin/ui.py` | the demo page: markup, CSS and vanilla JS, no build step |
 | `smart_bin/train.py`, `detect_smartbin.py`, `eval_per_class.py`, `analyze_runtime_bias.py` | legacy YOLOv8-cls path, kept working, bugs fixed |
 | `tools/bootstrap.py` | one-command rebuild: env → dataset → weights → ONNX → demo |
