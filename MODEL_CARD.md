@@ -98,8 +98,14 @@ interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
    grey plastic cup background, partial occlusion and dim light is unmeasured.
 3. Class imbalance: `trash` (91 training images) has the weakest recall, and only
    29 test images support it, so its 51.7 % has a ±17 pp interval.
-4. No calibration on device data; the 0.40 threshold in `fusion.py` is a starting
-   value, not a measured optimum. `evaluate_real.py` reports ECE so it can be tuned.
+4. No calibration on device data. The 0.40 threshold in `fusion.py` is a *deliberate*
+   operating point, not an unexamined default: sweeping it on the validation split
+   (`evaluate_real.py --sweep`, or `tools/eval_onnx.py --sweep` for the int8 file)
+   shows routing accuracy is flat from 0.20 to 0.35 and falls as the threshold rises,
+   because the model is rarely less than 0.40 confident on this data. Lowering it to
+   0.30 recovers ~0.2 pp of routing accuracy on test but refuses almost nothing, so
+   0.40 is kept as the fail-safe trade-off. On unknown backgrounds the confidence
+   distribution will shift and this threshold must be re-measured.
 5. 128 px input: fast, but unsuitable for fine material distinctions (foil vs paper).
 6. Single-label output: an item that is genuinely two materials (a laminated cup) is
    forced into one class; the design answer is the confidence threshold + residual
