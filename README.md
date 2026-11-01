@@ -28,9 +28,11 @@ python tools/bootstrap.py --full         # force the training stack even when on
 ```
 
 When the committed ONNX export is present, `--serve` installs **only**
-numpy + pillow + onnxruntime (48 MB of wheels, 190 MB installed) and boots in
-seconds; the 5.7 GB training stack is
-installed only when a model actually has to be produced.
+numpy + pillow + onnxruntime (48 MB of wheels, 190 MB installed). Measured on a
+bare clone with no venv, no dataset and no weights except the committed ones:
+**9.3 s** from `python3 tools/bootstrap.py --serve` to the first HTTP response,
+against 45 min of training plus a 5.7 GB install before this change. The 5.7 GB
+training stack is installed only when a model actually has to be produced.
 
 `bootstrap.py` is safe to re-run: every stage is skipped when it is already
 satisfied. The dataset (git-ignored), the virtualenv and the trained weights

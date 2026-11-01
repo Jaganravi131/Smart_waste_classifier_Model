@@ -711,12 +711,22 @@ same aggregate accuracy. `backends.py` now reproduces torchvision's filter
 numerically (max pixel difference 1.75e-02 in normalised units, i.e. one 8-bit
 level) and the flip count fell to 2.
 
-**Cold start.** With the export committed, `python tools/bootstrap.py --serve`
-installs 48 MB of wheels (numpy, pillow, onnxruntime; 190 MB installed) instead of
-the 5.7 GB training environment, and the server answers its first request in under
-a second. Verified here by serving the app from a torch-free virtualenv:
-`/tmp/rt_venv` has no torch, and `predict.py --backend onnx` completes a full
-prediction in 0.36 s including interpreter start-up.
+**Cold start, measured.** `git clone` this repository, then
+`python3 tools/bootstrap.py --serve`, on a machine with no virtualenv, no dataset
+and no weights other than the committed ones:
+
+| Stage | Time |
+|---|---|
+| venv created + 48 MB of wheels installed (numpy, pillow, onnxruntime) | 7.8 s |
+| 9-check smoke test on the exported model | 1.0 s |
+| server up, first `GET /api/info` answered | **9.3 s total** |
+| first `POST /api/predict` (plastic 92.7 %, YELLOW) | 30.3 ms |
+
+The same checkout needed **45.1 min** to train the model and a 5.7 GB PyTorch
+install to run it before this change. The runtime environment contains no torch at
+all: `predict.py --backend onnx` completes a full prediction in 0.36 s including
+interpreter start-up, and `tools/verify_deployment.py` - which produced the table
+above - cannot even import torch.
 
 ---
 
