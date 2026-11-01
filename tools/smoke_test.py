@@ -169,6 +169,36 @@ def main() -> int:
             )
             result = json.load(urllib.request.urlopen(request, timeout=30))
             report("POST /api/predict", "decision" in result, result["decision"]["compartment"])
+
+            # The page hands the server a sample URL instead of shipping the
+            # bytes. That path used to 400 (the URL went to base64.b64decode),
+            # which made every gallery click fail - so it is a check now.
+            if samples:
+                request = urllib.request.Request(
+                    f"{base}/api/predict",
+                    data=json.dumps({"image": samples[0]["url"], "threshold": 0.4}).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                try:
+                    sample_result = json.load(urllib.request.urlopen(request, timeout=30))
+                    report("POST /api/predict with a sample URL", "decision" in sample_result,
+                           sample_result["decision"]["compartment"])
+                except urllib.error.HTTPError as exc:
+                    report("POST /api/predict with a sample URL", False, f"HTTP {exc.code}")
+
+                request = urllib.request.Request(
+                    f"{base}/api/predict",
+                    data=json.dumps({"image": "api/sample/../../../etc/passwd"}).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                try:
+                    urllib.request.urlopen(request, timeout=30)
+                    report("sample path traversal refused", False, "request was accepted")
+                except urllib.error.HTTPError as exc:
+                    report("sample path traversal refused", exc.code == 400, f"HTTP {exc.code}")
+
+            page = urllib.request.urlopen(f"{base}/", timeout=20).read().decode()
+            report("demo page served", "BinGenie" in page and 'id="result"' in page, f"{len(page)} bytes")
         except Exception as exc:  # noqa: BLE001
             report("HTTP demo", False, f"{exc.__class__.__name__}: {exc}")
         finally:

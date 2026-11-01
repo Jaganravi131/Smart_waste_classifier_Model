@@ -1,14 +1,15 @@
 """
 BinGenie - live demo server for the trained classifier.
 
-A single-file, dependency-light web app (Python standard library + ONNX Runtime
-or PyTorch):
+A dependency-light web app: Python standard library for the server, ONNX Runtime
+or PyTorch for inference, and one static page (`ui.py`) with no build step.
 
     python app.py                 # http://0.0.0.0:8000
     python app.py --port 8080 --threshold 0.45
 
 Endpoints
-    GET  /                     demo page
+    GET  /                     demo page (from ui.py)
+    GET  /favicon.svg          icon
     GET  /api/info             model + measured metrics
     GET  /api/samples          sample images from the held-out test split
     GET  /api/sample/<class>/<file>  image bytes
@@ -26,6 +27,7 @@ import base64
 import io
 import json
 import random
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -35,244 +37,28 @@ from PIL import Image
 from dataset import TRASHNET_DIR
 from fusion import SensorReading, decide
 from model import STREAMS
+from predict import DecisionLog
+from ui import PAGE
 
 BASE_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BASE_DIR / "runs"
 LOG_PATH = BASE_DIR.parent / "logs" / "bingenie_decisions.csv"
 
 CLASSIFIER = None  # set in main()
+DECISION_LOG = None  # set in main(); the same CSV the CLI writes
+LOG_LOCK = threading.Lock()
 THRESHOLD = 0.40
 SAMPLES: list[dict] = []
 
-PAGE = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BinGenie - waste segregation demo</title>
-<style>
-  :root {
-    --green:#22c55e; --yellow:#eab308; --orange:#f97316; --red:#ef4444;
-    --bg:#0b1210; --panel:#131c19; --line:#22312c; --text:#e6f2ec; --muted:#8fa8a0;
-  }
-  * { box-sizing: border-box; }
-  body { margin:0; background:radial-gradient(1200px 700px at 20% -10%, #123 0%, var(--bg) 55%);
-         color:var(--text); font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; }
-  header { padding:26px 28px 10px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
-  h1 { margin:0; font-size:26px; letter-spacing:.4px; }
-  h1 span { color:var(--green); }
-  .tag { color:var(--muted); font-size:13px; }
-  main { padding:8px 28px 48px; display:grid; grid-template-columns: minmax(320px, 1.1fr) minmax(320px, 1fr);
-         gap:22px; align-items:start; max-width:1180px; }
-  @media (max-width: 880px) { main { grid-template-columns: 1fr; } }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
-  .card h2 { margin:0 0 12px; font-size:15px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted); }
-  .drop { border:2px dashed #2c443b; border-radius:14px; padding:26px; text-align:center; cursor:pointer;
-          transition:.15s; background:#0f1715; }
-  .drop.hover { border-color:var(--green); background:#10201a; }
-  .drop img { max-width:100%; max-height:320px; border-radius:10px; display:none; margin-top:6px; }
-  .drop p { margin:0; color:var(--muted); font-size:14px; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
-  button, .btn { background:#17342a; color:var(--text); border:1px solid #2b4a3e; border-radius:10px;
-          padding:9px 14px; font-size:13px; cursor:pointer; }
-  button:hover, .btn:hover { border-color:var(--green); }
-  button:disabled { opacity:.45; cursor:default; }
-  .verdict { margin-top:16px; border-radius:14px; padding:16px; border:1px solid var(--line); background:#0f1715; }
-  .verdict .cls { font-size:30px; font-weight:700; letter-spacing:.5px; }
-  .verdict .bin { font-size:16px; margin-top:4px; }
-  .pill { display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; margin-right:6px;
-          background:#1b2a24; color:var(--muted); }
-  .bars { margin-top:16px; display:grid; gap:7px; }
-  .bar { display:grid; grid-template-columns:88px 1fr 52px; gap:9px; align-items:center; font-size:12.5px; }
-  .bar .track { height:9px; background:#1a2a24; border-radius:99px; overflow:hidden; }
-  .bar .fill { height:100%; background:linear-gradient(90deg,#16a34a,#4ade80); border-radius:99px; }
-  .bar.dim .fill { background:#2f4a40; }
-  .muted { color:var(--muted); font-size:12.5px; }
-  .gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(74px,1fr)); gap:8px; margin-top:10px; }
-  .gallery img { width:100%; height:70px; object-fit:cover; border-radius:9px; cursor:pointer;
-                 border:2px solid transparent; }
-  .gallery img:hover { border-color:var(--green); }
-  .gallery figure { margin:0; position:relative; }
-  .gallery figcaption { font-size:10px; color:var(--muted); text-align:center; margin-top:2px; }
-  table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
-  th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); }
-  th { color:var(--muted); font-weight:500; }
-  code { background:#0f1715; padding:1px 5px; border-radius:5px; font-size:12px; }
-  a { color:#7ee2a8; }
-</style>
-</head>
-<body>
-<header>
-  <h1>Bin<span>Genie</span></h1>
-  <div class="tag">on-device waste classification &rarr; four-stream routing</div>
-</header>
-<main>
-  <section class="card">
-    <h2>1 &middot; Present an item</h2>
-    <div class="drop" id="drop">
-      <p><strong>Drop an image here</strong> or click to upload</p>
-      <p class="muted">jpeg / png &middot; processed locally, nothing leaves this machine</p>
-      <img id="preview" alt="preview">
-    </div>
-    <input type="file" id="file" accept="image/*" hidden>
-    <div class="row">
-      <button id="run" disabled>Classify &amp; route</button>
-      <button id="randomSample">Use a test-set image</button>
-      <label class="pill" style="padding:8px 10px;">threshold
-        <input id="thr" type="range" min="20" max="90" value="40" style="vertical-align:middle;width:90px">
-        <span id="thrVal">0.40</span>
-      </label>
-    </div>
-    <div class="muted" id="sampleHint" style="margin-top:8px;"></div>
-  </section>
-
-  <section class="card">
-    <h2>2 &middot; Decision</h2>
-    <div class="verdict" id="verdict">
-      <div class="cls" style="color:var(--muted)">-</div>
-      <div class="bin muted">waiting for an item</div>
-    </div>
-    <div class="bars" id="bars"></div>
-    <div class="muted" id="meta" style="margin-top:12px;"></div>
-  </section>
-
-  <section class="card" style="grid-column:1/-1">
-    <h2>3 &middot; Held-out test samples</h2>
-    <div class="muted">Images from <code>datasets/trashnet/test</code> - never seen during training.</div>
-    <div class="gallery" id="gallery"></div>
-  </section>
-
-  <section class="card" style="grid-column:1/-1">
-    <h2>4 &middot; Model card</h2>
-    <div id="info" class="muted">loading...</div>
-  </section>
-</main>
-<script>
-const $ = (id) => document.getElementById(id);
-let current = null;
-let SAMPLES = [];
-
-function streamColor(stream) {
-  return {biodegradable:'var(--green)', recyclable:'var(--yellow)',
-          electronic:'var(--orange)', residual:'var(--red)'}[stream] || 'var(--muted)';
-}
-
-$('thr').addEventListener('input', (e) => {
-  const v = (e.target.value / 100).toFixed(2);
-  $('thrVal').textContent = v;
-});
-
-$('drop').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', (e) => loadFile(e.target.files[0]));
-['dragover','dragenter'].forEach(ev => $('drop').addEventListener(ev, (e) => {
-  e.preventDefault(); $('drop').classList.add('hover'); }));
-['dragleave','drop'].forEach(ev => $('drop').addEventListener(ev, (e) => {
-  e.preventDefault(); $('drop').classList.remove('hover'); }));
-$('drop').addEventListener('drop', (e) => {
-  const f = e.dataTransfer.files[0]; if (f) loadFile(f);
-});
-
-function loadFile(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    current = reader.result;
-    $('preview').src = current;
-    $('preview').style.display = 'block';
-    $('run').disabled = false;
-    $('sampleHint').textContent = '';
-  };
-  reader.readAsDataURL(file);
-}
-
-$('run').addEventListener('click', async () => {
-  if (!current) return;
-  $('run').disabled = true;
-  $('meta').textContent = 'classifying...';
-  try {
-    const response = await fetch('api/predict', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({image: current, threshold: Number($('thr').value) / 100})
-    });
-    if (!response.ok) throw new Error(await response.text());
-    render(await response.json());
-  } catch (err) {
-    $('meta').textContent = 'error: ' + err.message;
-  } finally {
-    $('run').disabled = false;
-  }
-});
-
-function render(data) {
-  const d = data.decision;
-  const colour = streamColor(d.stream);
-  $('verdict').style.borderColor = colour;
-  $('verdict').innerHTML = `
-    <div class="cls" style="color:${colour}">${d.label.toUpperCase()}</div>
-    <div class="bin" style="color:${colour}">&#8594; ${d.compartment} compartment &middot; ${d.stream}</div>
-    <div style="margin-top:8px">
-      <span class="pill">${(d.confidence * 100).toFixed(1)}% confident</span>
-      <span class="pill">margin ${(d.margin * 100).toFixed(1)}%</span>
-      <span class="pill">${d.used_fusion ? 'sensor fusion used' : 'vision only'}</span>
-      <span class="pill">${data.latency_ms.toFixed(0)} ms</span>
-    </div>
-    <div class="muted" style="margin-top:8px">${d.reasons.join(' &middot; ')}</div>`;
-  $('bars').innerHTML = data.ranking.map(([name, p], i) => `
-    <div class="bar ${i ? 'dim' : ''}">
-      <span>${name}</span>
-      <span class="track"><span class="fill" style="width:${(p * 100).toFixed(1)}%"></span></span>
-      <span class="muted">${(p * 100).toFixed(1)}%</span>
-    </div>`).join('');
-  $('meta').textContent = `runtime ${data.runtime} · checkpoint ${data.checkpoint}`;
-}
-
-$('randomSample').addEventListener('click', () => {
-  if (!SAMPLES.length) return;
-  const pick = SAMPLES[Math.floor(Math.random() * SAMPLES.length)];
-  current = pick.url;
-  $('preview').src = pick.url;
-  $('preview').style.display = 'block';
-  $('run').disabled = false;
-  $('sampleHint').innerHTML = `loaded a <strong>${pick.label}</strong> image from the test split`;
-});
-
-async function boot() {
-  const info = await (await fetch('api/info')).json();
-  $('info').innerHTML = `
-    <div>checkpoint <code>${info.checkpoint}</code> · ${info.model} · ${info.imgsz}px · classes ${info.labels.join(', ')}</div>
-    <table>
-      <tr><th>metric</th><th>value</th></tr>
-      <tr><td>top-1 accuracy</td><td><strong>${info.metrics.top1_accuracy_pct ?? 'n/a'}</strong></td></tr>
-      <tr><td>top-3 accuracy</td><td>${info.metrics.top3_accuracy_pct ?? 'n/a'}</td></tr>
-      <tr><td>macro F1</td><td>${info.metrics.macro_f1_pct ?? 'n/a'}</td></tr>
-      <tr><td>routing accuracy (correct compartment)</td><td>${info.metrics.routing_accuracy_pct ?? 'n/a'}</td></tr>
-      <tr><td>items sent to residual</td><td>${info.metrics.residual_rate_pct ?? 'n/a'}</td></tr>
-      <tr><td>images evaluated</td><td>${info.metrics.images ?? 'n/a'}</td></tr>
-    </table>
-    <div style="margin-top:6px">measured on ${info.metrics.measured_on ?? 'the PyTorch checkpoint'}, held-out test split</div>
-    <div style="margin-top:8px">${info.note}</div>`;
-  SAMPLES = (await (await fetch('api/samples')).json()).samples;
-  const byClass = {};
-  SAMPLES.forEach(s => (byClass[s.label] = byClass[s.label] || []).push(s));
-  $('gallery').innerHTML = SAMPLES.map(s => `
-    <figure title="${s.label}">
-      <img src="${s.url}" data-url="${s.url}" data-label="${s.label}" alt="${s.label}">
-      <figcaption>${s.label}</figcaption>
-    </figure>`).join('');
-  document.querySelectorAll('.gallery img').forEach(img => img.addEventListener('click', () => {
-    current = img.dataset.url;
-    $('preview').src = current;
-    $('preview').style.display = 'block';
-    $('run').disabled = false;
-    $('sampleHint').innerHTML = `loaded a <strong>${img.dataset.label}</strong> image from the test split`;
-  }));
-}
-boot();
-</script>
-</body>
-</html>
-"""
+FAVICON = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+    '<rect width="24" height="24" rx="6" fill="#0f2a1d"/>'
+    '<path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8Z" fill="none" '
+    'stroke="#34d399" stroke-width="1.6" stroke-linejoin="round"/>'
+    '<path d="M9 8V5.8A1.8 1.8 0 0 1 10.8 4h2.4A1.8 1.8 0 0 1 15 5.8V8" fill="none" '
+    'stroke="#34d399" stroke-width="1.6" stroke-linecap="round"/>'
+    "</svg>"
+)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -303,6 +89,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path in ("/", "/index.html"):
             self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+        elif path == "/favicon.svg":
+            self._send(200, FAVICON.encode("utf-8"), "image/svg+xml")
         elif path == "/api/info":
             self._json(self._info())
         elif path == "/api/samples":
@@ -325,6 +113,11 @@ class Handler(BaseHTTPRequestHandler):
             decision, ranking = CLASSIFIER.classify(
                 image, threshold=threshold, margin=0.0, sensor=SensorReading()
             )
+            # One row per classified item, in the same CSV the CLI appends to -
+            # the log on the page is the real log, not a browser-side list.
+            if DECISION_LOG is not None:
+                with LOG_LOCK:
+                    DECISION_LOG.write(decision, source="web", image=str(payload.get("name", ""))[:120])
             self._json(
                 {
                     "decision": decision.as_dict(),
@@ -342,8 +135,23 @@ class Handler(BaseHTTPRequestHandler):
     def _decode(data_url: str) -> Image.Image:
         if not data_url:
             raise ValueError("no image supplied")
-        payload = data_url.split(",", 1)[1] if data_url.startswith("data:") else data_url
-        return Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGB")
+        if data_url.startswith("data:"):
+            payload = data_url.split(",", 1)[1]
+            return Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGB")
+        # The page may point at one of its own held-out samples instead of
+        # shipping the bytes. Resolve it through the same guard as /api/sample,
+        # so a path can never escape the dataset directory. (Clicking a sample
+        # used to fail with a 400: the URL was handed to base64.b64decode.)
+        relative = data_url.split("api/sample/", 1)[-1].lstrip("/")
+        root = TRASHNET_DIR.resolve()
+        target = (root / relative).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as exc:  # pragma: no cover - defensive
+            raise ValueError("image path outside the dataset") from exc
+        if not target.is_file():
+            raise ValueError(f"no such sample image: {relative}")
+        return Image.open(target).convert("RGB")
 
     def _serve_sample(self, rel: str):
         target = (TRASHNET_DIR / rel).resolve()
@@ -380,15 +188,26 @@ class Handler(BaseHTTPRequestHandler):
             raw = json.loads(metrics_path.read_text())
             if metrics_path == deployed:
                 measured_on = f"the shipped artefact ({raw.get('backend', 'onnx')})"
+            per_class = [
+                {
+                    "label": name,
+                    "recall": values["recall"],
+                    "precision": values["precision"],
+                    "f1": values["f1"],
+                    "support": values["support"],
+                }
+                for name, values in (raw.get("per_class") or {}).items()
+            ]
             metrics = {
-                "top1_accuracy_pct": f"{raw['top1_accuracy'] * 100:.2f} % "
-                                     f"(95 % CI {raw['top1_ci95'][0] * 100:.2f}-{raw['top1_ci95'][1] * 100:.2f})",
+                "top1_accuracy_pct": f"{raw['top1_accuracy'] * 100:.2f} %",
+                "top1_ci_text": f"95 % CI {raw['top1_ci95'][0] * 100:.2f}-{raw['top1_ci95'][1] * 100:.2f}",
                 "top3_accuracy_pct": f"{raw['top3_accuracy'] * 100:.2f} %",
                 "macro_f1_pct": f"{raw['macro_f1'] * 100:.2f} %",
                 "routing_accuracy_pct": f"{raw['routing_accuracy_streams'] * 100:.2f} %",
                 "residual_rate_pct": f"{raw['residual_rate'] * 100:.2f} %",
                 "images": raw["images"],
                 "measured_on": measured_on,
+                "per_class": per_class,
             }
         try:
             artifact_label = str(artifact.relative_to(BASE_DIR.parent))
@@ -397,6 +216,7 @@ class Handler(BaseHTTPRequestHandler):
         return {
             "checkpoint": artifact_label,
             "backend": CLASSIFIER.describe(),
+            "backend_kind": getattr(CLASSIFIER.backend, "kind", "torch"),
             "model": "MobileNetV3-Small (trained here, no cloud)",
             "imgsz": CLASSIFIER.imgsz,
             "labels": CLASSIFIER.labels,
@@ -428,7 +248,7 @@ def collect_samples(limit_per_class: int = 6) -> list[dict]:
 
 
 def main() -> int:
-    global CLASSIFIER, THRESHOLD, SAMPLES
+    global CLASSIFIER, THRESHOLD, SAMPLES, DECISION_LOG
     parser = argparse.ArgumentParser(description="BinGenie demo server")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="0.0.0.0")
@@ -447,6 +267,7 @@ def main() -> int:
     CLASSIFIER = Classifier(args.checkpoint, threads=args.threads, tta=args.tta,
                             backend=args.backend, onnx=args.onnx)
     SAMPLES = collect_samples()
+    DECISION_LOG = DecisionLog(LOG_PATH)
 
     print("=" * 62)
     print("  BinGenie demo")

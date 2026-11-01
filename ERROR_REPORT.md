@@ -741,7 +741,8 @@ above - cannot even import torch.
 | `smart_bin/evaluate_real.py` | **new** — honest evaluation: CI, per-class metrics, ECE, routing accuracy, confusion matrix |
 | `smart_bin/fusion.py` | **new** — the fusion rule layer, rewritten with abstain semantics + self-tests |
 | `smart_bin/predict.py` | **new** — image/folder/video/camera inference, decision-level CSV log |
-| `smart_bin/app.py` | **new** — browser demo (stdlib server, live preview) |
+| `smart_bin/app.py` | **new** — demo server (stdlib HTTP server + JSON API) |
+| `smart_bin/ui.py` | **new** — the demo page: markup, CSS and vanilla JS, no build step |
 | `tools/verify_report_numbers.py` | **new** — 42 arithmetic checks on the report |
 | `archive/simulated_plots/` | the 11 scripts that fabricated the report's figures, archived **not deleted**, with a README naming the figures they produced |
 | `README.md`, `requirements.txt` | rewritten to describe what the code actually does and needs |

@@ -97,7 +97,8 @@ instead of the from-scratch baseline.
 | `smart_bin/onnx_export.py` | ONNX export + float-versus-deployed verification |
 | `smart_bin/backends.py` | ONNX (light) and PyTorch inference backends |
 | `smart_bin/predict.py` | image / folder / video / camera inference CLI |
-| `smart_bin/app.py` | browser demo (standard-library HTTP server) |
+| `smart_bin/app.py` | demo server (standard-library HTTP server, JSON API) |
+| `smart_bin/ui.py` | the demo page: markup, CSS and vanilla JS, no build step |
 | `smart_bin/train.py`, `detect_smartbin.py`, `eval_per_class.py`, `analyze_runtime_bias.py` | legacy YOLOv8-cls path, kept working, bugs fixed |
 | `tools/bootstrap.py` | one-command rebuild: env → dataset → weights → ONNX → demo |
 | `tools/verify_deployment.py` | scores the shipped ONNX artefact without PyTorch |
