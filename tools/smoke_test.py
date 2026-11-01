@@ -205,6 +205,33 @@ def main() -> int:
             server.shutdown()
             server.server_close()
 
+    # -- balanced sampler: one weight per IMAGE, not per class ---------------
+    try:
+        from torchvision.datasets import ImageFolder
+
+        from train_real import class_weights
+
+        train_dir = REPO / "smart_bin" / "datasets" / "trashnet" / "train"
+        if train_dir.exists():
+            dataset = ImageFolder(train_dir)
+            weights = class_weights(dataset)
+            report("balanced sampler has one weight per image", len(weights) == len(dataset),
+                   f"{len(weights)} weights for {len(dataset)} images")
+            counts = np.bincount([target for _, target in dataset.samples],
+                                 minlength=len(dataset.classes))
+            rarest = int(np.argmin(counts))
+            mean_rarest = float(np.mean([weights[i] for i, (_, t) in
+                                        enumerate(dataset.samples) if t == rarest]))
+            mean_common = float(np.mean([weights[i] for i, (_, t) in
+                                        enumerate(dataset.samples) if t == int(np.argmax(counts))]))
+            report("rare class is oversampled", mean_rarest > mean_common * 2,
+                   f"{dataset.classes[rarest]} {mean_rarest:.2f} vs "
+                   f"{dataset.classes[int(np.argmax(counts))]} {mean_common:.2f}")
+        else:
+            report("balanced sampler has one weight per image", False, "no training split")
+    except Exception as exc:  # noqa: BLE001
+        report("balanced sampler", False, f"{exc.__class__.__name__}: {exc}")
+
     # -- frame-quality guard -------------------------------------------------
     try:
         from PIL import Image as _Image
