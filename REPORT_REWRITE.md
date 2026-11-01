@@ -532,7 +532,10 @@ Fix these in the text (working in `tools/verify_report_numbers.py`):
 > python smart_bin/evaluate_real.py    # §6.2 tables, CIs, confusion matrix
 > python smart_bin/onnx_export.py --int8   # float-vs-deployed agreement
 > python tools/verify_report_numbers.py    # 42 arithmetic checks on this report
-> python tools/smoke_test.py               # 13 end-to-end pipeline checks
+> python tools/smoke_test.py               # 19 end-to-end pipeline checks
+> python tools/robustness_sweep.py --guard # §6.5 degradation study, with the guard
+> python tools/arch_sweep.py arch30_mobilenet_v3_small arch30_resnet18 arch30_efficientnet_b0
+> python tools/plot_arch_compare.py arch30_mobilenet_v3_small arch30_resnet18 arch30_efficientnet_b0
 > ```
 >
 > The repository contains the trained weights (`smart_bin/runs/bingenie_mnv3s_128/`,
