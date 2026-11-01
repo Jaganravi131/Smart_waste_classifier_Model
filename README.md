@@ -100,6 +100,8 @@ instead of the from-scratch baseline.
 | `smart_bin/app.py` | demo server (standard-library HTTP server, JSON API) |
 | `tools/compare_runs.py` | paired run comparison: Wilson CIs, exact McNemar, per-class recall |
 | `tools/eval_onnx.py` | scores the deployed int8 ONNX artefact and sweeps its threshold |
+| `tools/arch_sweep.py` | tunes each model's routing threshold on val, then scores test |
+| `tools/plot_arch_compare.py` | validation curves of several runs, by epoch and by CPU-minute |
 | `smart_bin/ui.py` | the demo page: markup, CSS and vanilla JS, no build step |
 | `smart_bin/train.py`, `detect_smartbin.py`, `eval_per_class.py`, `analyze_runtime_bias.py` | legacy YOLOv8-cls path, kept working, bugs fixed |
 | `tools/bootstrap.py` | one-command rebuild: env → dataset → weights → ONNX → demo |

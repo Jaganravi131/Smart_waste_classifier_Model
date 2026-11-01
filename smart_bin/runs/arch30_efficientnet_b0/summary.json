@@ -1,0 +1,63 @@
+{
+  "run": "arch30_efficientnet_b0",
+  "model": "efficientnet_b0",
+  "pretrained_requested": false,
+  "pretrained_init": false,
+  "mixup_alpha": 0.0,
+  "ema": false,
+  "balanced_sampling": false,
+  "imgsz": 128,
+  "epochs": 30,
+  "batch": 32,
+  "lr": 0.002,
+  "weight_decay": 0.02,
+  "label_smoothing": 0.1,
+  "aug_scale_min": 0.7,
+  "aug_rotation": 15,
+  "seed": 42,
+  "labels": [
+    "cardboard",
+    "glass",
+    "metal",
+    "paper",
+    "plastic",
+    "trash"
+  ],
+  "dataset": {
+    "train": {
+      "cardboard": 287,
+      "glass": 354,
+      "metal": 286,
+      "paper": 403,
+      "plastic": 347,
+      "trash": 91
+    },
+    "val": {
+      "cardboard": 46,
+      "glass": 65,
+      "metal": 56,
+      "paper": 83,
+      "plastic": 61,
+      "trash": 17
+    },
+    "test": {
+      "cardboard": 70,
+      "glass": 82,
+      "metal": 68,
+      "paper": 108,
+      "plastic": 74,
+      "trash": 29
+    },
+    "train_imbalance_ratio": 4.43,
+    "train_total": 1768
+  },
+  "train_images": 1768,
+  "val_images": 328,
+  "best_epoch": 30,
+  "best_val_acc": 0.6768,
+  "final_train_acc": 0.67557,
+  "final_val_acc": 0.67683,
+  "train_seconds": 2200.0,
+  "seconds_per_epoch": 73.3,
+  "checkpoint": "runs/arch30_efficientnet_b0/best.pt"
+}

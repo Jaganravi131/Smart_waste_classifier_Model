@@ -197,21 +197,42 @@ not (cardboard and paper have recall above precision).
 
 ### 6.3 Architecture selection — replacement
 
-Two options; pick one and be consistent:
+> Three backbones were trained under an identical protocol — the same split, the
+> same augmentation (scale 0.7–1.0, ±15° rotation, colour jitter), 128×128 input,
+> batch 32, AdamW at 2×10⁻³ with three warm-up epochs and cosine decay, weight
+> decay 0.02, label smoothing 0.1, seed 42, from scratch, no ImageNet weights — for
+> 30 epochs each. The routing threshold was tuned on the validation split
+> separately for each model, because a fixed threshold penalises whichever model is
+> less confident rather than whichever is less correct.
+>
+> | 30 epochs, 128 px | parameters | test top-1 | macro-F1 | routing (own τ) | CPU time | ms/image |
+> |---|---|---|---|---|---|---|
+> | MobileNetV3-Small | 1.52 M | 72.16 % | 68.23 % | 94.20 % | 11.6 min | 1.5 |
+> | ResNet-18 | 11.18 M | 72.39 % | 68.45 % | 92.58 % | 32.1 min | 9.3 |
+> | EfficientNet-B0 | 4.02 M | 71.93 % | 64.04 % | 93.27 % | 36.7 min | 9.4 |
+>
+> An exact McNemar test on the paired predictions finds no difference: ResNet-18
+> versus MobileNetV3-Small 36 against 37 discordant images (*p* = 1.00), and
+> EfficientNet-B0 versus MobileNetV3-Small 34 against 33 (*p* = 1.00). MobileNetV3-Small
+> is therefore retained: it matches the largest network in the comparison to within
+> 0.23 percentage points at one seventh of the parameters and one sixth of the
+> per-image inference cost, which is the quantity that matters on a Raspberry Pi.
+> The training curves for these three runs are in
+> `smart_bin/runs/architecture_compare.png` (validation accuracy against epoch, and
+> the same curves against CPU-minutes); they are read from the logged per-epoch
+> history rather than drawn by hand.
+>
+> Two caveats. The 30-epoch budget truncates every model, so the table is a
+> ranking under equal compute rather than each architecture's ceiling; the same
+> network trained for 110 epochs reaches 78.89 %, i.e. the training budget is worth
+> more than the architecture. And the earlier ranking of eleven networks that
+> appeared in drafts of this chapter was not produced by any run in this project; it
+> has been withdrawn and replaced by this measurement.
 
-**Option A (recommended, honest).**
-
-> The deployed model is MobileNetV3-Small, selected because it is the largest
-> network that still trains from scratch on 1,768 images without over-fitting
-> (training accuracy 93.9 % against validation 80.5 %), and because its 128-pixel
-> input keeps the on-device cost low. No comparative sweep of eleven architectures
-> was carried out; the ranking in earlier drafts of this report was not supported by
-> a benchmark, and it has been removed. A controlled comparison against ResNet-18
-> and EfficientNet-B0 under identical training settings is scheduled for Phase II.
-
-**Option B.** Run `train_real.py` with `--model resnet18` and `--model
-efficientnet_b0` (the factory supports both), keep the best checkpoint per model in
-`runs/`, and tabulate the three real runs, each with its own CI.
+**Do not** keep Option B from the previous draft (running `--model resnet18` and
+`--model efficientnet_b0` "and tabulating the three real runs"): that has now been
+done, and the answer is that the three are indistinguishable, so there is no
+selection to report beyond the deployment cost.
 
 ### 6.4 Training convergence — replacement
 
@@ -388,7 +409,7 @@ previously printed contained `CLASS_INDEX`, which is defined nowhere, and a
 
 | Figure | Action | Replacement |
 |---|---|---|
-| Fig. 6.1 (11 architectures vs latency) | **withdraw** — no benchmark exists | §6.3 Option B table, if you run it |
+| Fig. 6.1 (11 architectures vs latency) | **withdraw** — no benchmark exists | the §6.3 measured table, and `smart_bin/runs/architecture_compare.png` |
 | Fig. 6.2 (training curves) | **replace** | `smart_bin/runs/bingenie_mnv3s_128/training_curves.png` (real) |
 | Fig. 6.3 (5 operating conditions) | **withdraw until measured** | the §6.5 protocol table |
 | Fig. 6.4 (class distribution) | **replace** | distribution from the new decision log |

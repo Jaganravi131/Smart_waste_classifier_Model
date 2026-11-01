@@ -1,0 +1,369 @@
+{
+  "tta": false,
+  "results": [
+    {
+      "run": "arch30_mobilenet_v3_small",
+      "imgsz": 128,
+      "params_m": 1.52,
+      "epochs": 30,
+      "seconds_per_epoch": 23.2,
+      "val_best_threshold": 0.25,
+      "val_routing": 0.936,
+      "val_routing_at_040": 0.8598,
+      "threshold_for_test": 0.25,
+      "test_top1": 0.7216,
+      "test_macro_f1": 0.6823,
+      "test_routing": 0.942,
+      "test_residual_rate": 0.0046,
+      "test_latency_ms": 1.47,
+      "test_routing_at_040": 0.8863,
+      "val_sweep": [
+        {
+          "threshold": 0.15,
+          "routing": 0.936,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.2,
+          "routing": 0.936,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.25,
+          "routing": 0.936,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.3,
+          "routing": 0.9238,
+          "residual_rate": 0.0366,
+          "coverage": 0.9634
+        },
+        {
+          "threshold": 0.35,
+          "routing": 0.8872,
+          "residual_rate": 0.0793,
+          "coverage": 0.9207
+        },
+        {
+          "threshold": 0.4,
+          "routing": 0.8598,
+          "residual_rate": 0.125,
+          "coverage": 0.875
+        },
+        {
+          "threshold": 0.45,
+          "routing": 0.8079,
+          "residual_rate": 0.1799,
+          "coverage": 0.8201
+        },
+        {
+          "threshold": 0.5,
+          "routing": 0.7439,
+          "residual_rate": 0.25,
+          "coverage": 0.75
+        },
+        {
+          "threshold": 0.55,
+          "routing": 0.7104,
+          "residual_rate": 0.3049,
+          "coverage": 0.6951
+        },
+        {
+          "threshold": 0.6,
+          "routing": 0.6768,
+          "residual_rate": 0.3384,
+          "coverage": 0.6616
+        },
+        {
+          "threshold": 0.65,
+          "routing": 0.6341,
+          "residual_rate": 0.3902,
+          "coverage": 0.6098
+        },
+        {
+          "threshold": 0.7,
+          "routing": 0.5762,
+          "residual_rate": 0.4543,
+          "coverage": 0.5457
+        }
+      ]
+    },
+    {
+      "run": "arch30_resnet18",
+      "imgsz": 128,
+      "params_m": 11.18,
+      "epochs": 30,
+      "seconds_per_epoch": 64.3,
+      "val_best_threshold": 0.3,
+      "val_routing": 0.9543,
+      "val_routing_at_040": 0.8933,
+      "threshold_for_test": 0.3,
+      "test_top1": 0.7239,
+      "test_macro_f1": 0.6845,
+      "test_routing": 0.9258,
+      "test_residual_rate": 0.0162,
+      "test_latency_ms": 9.29,
+      "test_routing_at_040": 0.8863,
+      "val_sweep": [
+        {
+          "threshold": 0.15,
+          "routing": 0.9573,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.2,
+          "routing": 0.9573,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.25,
+          "routing": 0.9573,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.3,
+          "routing": 0.9543,
+          "residual_rate": 0.003,
+          "coverage": 0.997
+        },
+        {
+          "threshold": 0.35,
+          "routing": 0.939,
+          "residual_rate": 0.0335,
+          "coverage": 0.9665
+        },
+        {
+          "threshold": 0.4,
+          "routing": 0.8933,
+          "residual_rate": 0.0823,
+          "coverage": 0.9177
+        },
+        {
+          "threshold": 0.45,
+          "routing": 0.8506,
+          "residual_rate": 0.1341,
+          "coverage": 0.8659
+        },
+        {
+          "threshold": 0.5,
+          "routing": 0.7957,
+          "residual_rate": 0.1951,
+          "coverage": 0.8049
+        },
+        {
+          "threshold": 0.55,
+          "routing": 0.75,
+          "residual_rate": 0.2622,
+          "coverage": 0.7378
+        },
+        {
+          "threshold": 0.6,
+          "routing": 0.6799,
+          "residual_rate": 0.3384,
+          "coverage": 0.6616
+        },
+        {
+          "threshold": 0.65,
+          "routing": 0.6341,
+          "residual_rate": 0.3902,
+          "coverage": 0.6098
+        },
+        {
+          "threshold": 0.7,
+          "routing": 0.5854,
+          "residual_rate": 0.4451,
+          "coverage": 0.5549
+        }
+      ]
+    },
+    {
+      "run": "arch30_efficientnet_b0",
+      "imgsz": 128,
+      "params_m": 4.02,
+      "epochs": 30,
+      "seconds_per_epoch": 73.3,
+      "val_best_threshold": 0.25,
+      "val_routing": 0.9451,
+      "val_routing_at_040": 0.8445,
+      "threshold_for_test": 0.25,
+      "test_top1": 0.7193,
+      "test_macro_f1": 0.6404,
+      "test_routing": 0.9327,
+      "test_residual_rate": 0.007,
+      "test_latency_ms": 9.44,
+      "test_routing_at_040": 0.8677,
+      "val_sweep": [
+        {
+          "threshold": 0.15,
+          "routing": 0.9482,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.2,
+          "routing": 0.9482,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.25,
+          "routing": 0.9451,
+          "residual_rate": 0.0122,
+          "coverage": 0.9878
+        },
+        {
+          "threshold": 0.3,
+          "routing": 0.9238,
+          "residual_rate": 0.0427,
+          "coverage": 0.9573
+        },
+        {
+          "threshold": 0.35,
+          "routing": 0.9024,
+          "residual_rate": 0.0762,
+          "coverage": 0.9238
+        },
+        {
+          "threshold": 0.4,
+          "routing": 0.8445,
+          "residual_rate": 0.1524,
+          "coverage": 0.8476
+        },
+        {
+          "threshold": 0.45,
+          "routing": 0.7927,
+          "residual_rate": 0.2043,
+          "coverage": 0.7957
+        },
+        {
+          "threshold": 0.5,
+          "routing": 0.6951,
+          "residual_rate": 0.3079,
+          "coverage": 0.6921
+        },
+        {
+          "threshold": 0.55,
+          "routing": 0.6311,
+          "residual_rate": 0.3902,
+          "coverage": 0.6098
+        },
+        {
+          "threshold": 0.6,
+          "routing": 0.5854,
+          "residual_rate": 0.4482,
+          "coverage": 0.5518
+        },
+        {
+          "threshold": 0.65,
+          "routing": 0.5396,
+          "residual_rate": 0.5061,
+          "coverage": 0.4939
+        },
+        {
+          "threshold": 0.7,
+          "routing": 0.5,
+          "residual_rate": 0.5457,
+          "coverage": 0.4543
+        }
+      ]
+    },
+    {
+      "run": "bingenie_mnv3s_128",
+      "imgsz": 128,
+      "params_m": 1.52,
+      "epochs": 110,
+      "seconds_per_epoch": 24.6,
+      "val_best_threshold": 0.35,
+      "val_routing": 0.9695,
+      "val_routing_at_040": 0.9665,
+      "threshold_for_test": 0.35,
+      "test_top1": 0.7889,
+      "test_macro_f1": 0.7635,
+      "test_routing": 0.949,
+      "test_residual_rate": 0.0046,
+      "test_latency_ms": 1.1,
+      "test_routing_at_040": 0.949,
+      "val_sweep": [
+        {
+          "threshold": 0.15,
+          "routing": 0.9726,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.2,
+          "routing": 0.9726,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.25,
+          "routing": 0.9726,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.3,
+          "routing": 0.9726,
+          "residual_rate": 0.0,
+          "coverage": 1.0
+        },
+        {
+          "threshold": 0.35,
+          "routing": 0.9695,
+          "residual_rate": 0.003,
+          "coverage": 0.997
+        },
+        {
+          "threshold": 0.4,
+          "routing": 0.9665,
+          "residual_rate": 0.0061,
+          "coverage": 0.9939
+        },
+        {
+          "threshold": 0.45,
+          "routing": 0.9512,
+          "residual_rate": 0.0274,
+          "coverage": 0.9726
+        },
+        {
+          "threshold": 0.5,
+          "routing": 0.9299,
+          "residual_rate": 0.064,
+          "coverage": 0.936
+        },
+        {
+          "threshold": 0.55,
+          "routing": 0.8994,
+          "residual_rate": 0.0976,
+          "coverage": 0.9024
+        },
+        {
+          "threshold": 0.6,
+          "routing": 0.8841,
+          "residual_rate": 0.1189,
+          "coverage": 0.8811
+        },
+        {
+          "threshold": 0.65,
+          "routing": 0.8598,
+          "residual_rate": 0.1524,
+          "coverage": 0.8476
+        },
+        {
+          "threshold": 0.7,
+          "routing": 0.814,
+          "residual_rate": 0.2012,
+          "coverage": 0.7988
+        }
+      ]
+    }
+  ]
+}

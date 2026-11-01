@@ -1,0 +1,213 @@
+{
+  "run": "arch30_mobilenet_v3_small",
+  "split": "test",
+  "images": 431,
+  "top1_accuracy": 0.7216,
+  "top1_ci95": [
+    0.6774,
+    0.7618
+  ],
+  "top3_accuracy": 0.942,
+  "macro_f1": 0.6823,
+  "routing_accuracy_streams": 0.8863,
+  "routing_ci95": [
+    0.8529,
+    0.9129
+  ],
+  "residual_rate": 0.0928,
+  "fusion_override_rate": 0.0,
+  "fusion_rules_available": true,
+  "threshold": 0.4,
+  "tta": false,
+  "mean_confidence": 0.6938,
+  "ece_10bin": 0.0539,
+  "latency_ms_per_image": 2.9,
+  "threshold_sweep": [
+    {
+      "threshold": 0.2,
+      "routing_accuracy": 0.942,
+      "residual_rate": 0.0,
+      "coverage": 1.0
+    },
+    {
+      "threshold": 0.25,
+      "routing_accuracy": 0.942,
+      "residual_rate": 0.0046,
+      "coverage": 0.9954
+    },
+    {
+      "threshold": 0.3,
+      "routing_accuracy": 0.9374,
+      "residual_rate": 0.0162,
+      "coverage": 0.9838
+    },
+    {
+      "threshold": 0.35,
+      "routing_accuracy": 0.9188,
+      "residual_rate": 0.051,
+      "coverage": 0.949
+    },
+    {
+      "threshold": 0.4,
+      "routing_accuracy": 0.8863,
+      "residual_rate": 0.0928,
+      "coverage": 0.9072
+    },
+    {
+      "threshold": 0.45,
+      "routing_accuracy": 0.8399,
+      "residual_rate": 0.1439,
+      "coverage": 0.8561
+    },
+    {
+      "threshold": 0.5,
+      "routing_accuracy": 0.7865,
+      "residual_rate": 0.2065,
+      "coverage": 0.7935
+    },
+    {
+      "threshold": 0.55,
+      "routing_accuracy": 0.7401,
+      "residual_rate": 0.2761,
+      "coverage": 0.7239
+    },
+    {
+      "threshold": 0.6,
+      "routing_accuracy": 0.6891,
+      "residual_rate": 0.3318,
+      "coverage": 0.6682
+    },
+    {
+      "threshold": 0.65,
+      "routing_accuracy": 0.6195,
+      "residual_rate": 0.4037,
+      "coverage": 0.5963
+    }
+  ],
+  "per_class": {
+    "cardboard": {
+      "support": 70,
+      "precision": 0.831,
+      "recall": 0.8429,
+      "f1": 0.8369,
+      "recall_ci95": [
+        0.7401,
+        0.9099
+      ],
+      "mean_confidence": 0.7884
+    },
+    "glass": {
+      "support": 82,
+      "precision": 0.6667,
+      "recall": 0.6585,
+      "f1": 0.6626,
+      "recall_ci95": [
+        0.5509,
+        0.752
+      ],
+      "mean_confidence": 0.6539
+    },
+    "metal": {
+      "support": 68,
+      "precision": 0.6667,
+      "recall": 0.6471,
+      "f1": 0.6567,
+      "recall_ci95": [
+        0.5284,
+        0.75
+      ],
+      "mean_confidence": 0.6434
+    },
+    "paper": {
+      "support": 108,
+      "precision": 0.746,
+      "recall": 0.8704,
+      "f1": 0.8034,
+      "recall_ci95": [
+        0.7941,
+        0.9212
+      ],
+      "mean_confidence": 0.7127
+    },
+    "plastic": {
+      "support": 74,
+      "precision": 0.7042,
+      "recall": 0.6757,
+      "f1": 0.6897,
+      "recall_ci95": [
+        0.5627,
+        0.7714
+      ],
+      "mean_confidence": 0.7133
+    },
+    "trash": {
+      "support": 29,
+      "precision": 0.625,
+      "recall": 0.3448,
+      "f1": 0.4444,
+      "recall_ci95": [
+        0.1994,
+        0.5266
+      ],
+      "mean_confidence": 0.5771
+    }
+  },
+  "confusion_matrix": [
+    [
+      59,
+      1,
+      5,
+      4,
+      1,
+      0
+    ],
+    [
+      0,
+      54,
+      7,
+      4,
+      14,
+      3
+    ],
+    [
+      4,
+      7,
+      44,
+      9,
+      4,
+      0
+    ],
+    [
+      2,
+      6,
+      4,
+      94,
+      0,
+      2
+    ],
+    [
+      2,
+      7,
+      3,
+      11,
+      50,
+      1
+    ],
+    [
+      4,
+      6,
+      3,
+      4,
+      2,
+      10
+    ]
+  ],
+  "labels": [
+    "cardboard",
+    "glass",
+    "metal",
+    "paper",
+    "plastic",
+    "trash"
+  ]
+}

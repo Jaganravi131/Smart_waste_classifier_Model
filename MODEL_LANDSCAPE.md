@@ -207,6 +207,50 @@ the shipped default because a bin that abstains on a genuinely ambiguous item is
 feature, not a bug; the numbers above exist so the choice is documented rather than
 implicit.
 
+### 7.2 Three backbones, one budget
+
+The report used to quote a ranking of eleven architectures that no run in this
+repository supported. Section 6.3 of `REPORT_REWRITE.md` promised a controlled
+comparison instead; this is it. Identical protocol for all three — same split, same
+augmentation, 128 px, batch 32, AdamW at 2×10⁻³ with 3 warm-up epochs and cosine
+decay, weight decay 0.02, label smoothing 0.1, seed 42, **from scratch, no ImageNet
+weights** — and the same 30-epoch budget, because on two CPU cores that is already
+75 minutes of compute in total. The routing threshold is tuned per model on
+validation (`tools/arch_sweep.py`) rather than borrowed from the shipped run, for
+the reason established in §7.1.
+
+| 30 epochs, 128 px | params | test top-1 | macro-F1 | routing (own τ) | CPU time | ms/image |
+|---|---|---|---|---|---|---|
+| MobileNetV3-Small | 1.52 M | 72.16 % | 68.23 % | 94.20 % | **11.6 min** | **1.5** |
+| ResNet-18 | 11.18 M | **72.39 %** | **68.45 %** | 92.58 % | 32.1 min | 9.3 |
+| EfficientNet-B0 | 4.02 M | 71.93 % | 64.04 % | 93.27 % | 36.7 min | 9.4 |
+
+Exact McNemar on the paired test predictions: ResNet-18 vs MobileNetV3-Small, 36 vs
+37 discordant images, **p = 1.00**; EfficientNet-B0 vs MobileNetV3-Small, 34 vs 33,
+**p = 1.00**. Nothing separates them.
+
+Two things follow, and both matter more than the ranking:
+
+* **Architecture is not the lever at this data scale.** Seven times the parameters
+  and six times the inference cost buy 0.23 pp, which is not distinguishable from
+  zero on 431 images. The levers that *were* measured to move the number are the
+  training budget (same network, 110 epochs instead of 30: **78.89 %**, +6.7 pp for
+  33 extra minutes) and, per §7, the ImageNet initialisation.
+* **Validation does not rank them either.** ResNet-18 was the best on validation
+  (71.95 % vs 69.82 % for MobileNetV3-Small, +2.1 pp) and the two are inseparable on
+  test (+0.23 pp). With 328 validation images, a 2-point gap is a coin flip.
+
+The curves are in `smart_bin/runs/architecture_compare.png`. The right-hand panel is
+the one to look at for an embedded target: MobileNetV3-Small crosses 70 % validation
+accuracy after about 10 CPU-minutes, ResNet-18 needs 22, and EfficientNet-B0 does not
+get there inside its 37-minute budget — it is a long-schedule architecture and this
+experiment never gave it one.
+
+Caveat, stated plainly: 30 epochs is a truncated budget for every model, so the
+table is a *relative* ranking under equal compute, not each architecture's ceiling.
+The shipped model was trained for 110 epochs and lands 6.7 pp higher than its own
+30-epoch entry above.
+
 ---
 
 ## 8. Recommendation
@@ -221,9 +265,10 @@ RealWaste ceiling for any conventional model is ~89 %.
 
 Ranked by value per hour spent, on our own evidence:
 
-1. **Do nothing to the architecture.** §7.1 shows the 160 px + MixUp + EMA run buys
-   +1.4 pp at p = 0.49 and doubles the artefact. Report it as an ablation; do not
-   ship it.
+1. **Do nothing to the architecture.** §7.2 shows ResNet-18 at seven times the
+   parameters scoring +0.23 pp (p = 1.00), and §7.1 shows the 160 px run buying
+   +1.4 pp (p = 0.49) for twice the artefact. Report both as ablations; ship
+   neither.
 2. **The only lever with a known large payoff is ImageNet initialisation**
    (≈ +10 pp by §7). It is one command, it needs a machine with internet, and it is
    already wired up:
