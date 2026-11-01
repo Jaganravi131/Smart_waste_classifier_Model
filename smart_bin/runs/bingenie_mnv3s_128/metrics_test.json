@@ -21,7 +21,7 @@
   "tta": false,
   "mean_confidence": 0.834,
   "ece_10bin": 0.04,
-  "latency_ms_per_image": 1.61,
+  "latency_ms_per_image": 1.65,
   "per_class": {
     "cardboard": {
       "support": 70,
