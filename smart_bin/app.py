@@ -149,6 +149,7 @@ PAGE = """<!doctype html>
 <script>
 const $ = (id) => document.getElementById(id);
 let current = null;
+let SAMPLES = [];
 
 function streamColor(stream) {
   return {biodegradable:'var(--green)', recyclable:'var(--yellow)',
