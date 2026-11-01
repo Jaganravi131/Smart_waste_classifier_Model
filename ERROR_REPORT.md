@@ -20,7 +20,7 @@ Typographical and formatting errors are deliberately **not** listed, as requeste
 Every numeric claim below is machine-checkable:
 
 ```bash
-python tools/verify_report_numbers.py      # 42 arithmetic checks, PASS/FAIL per line
+python tools/verify_report_numbers.py      # 42 arithmetic checks, PASS/FAIL per line (20/42 pass as submitted)
 ```
 
 ---
@@ -85,6 +85,12 @@ false as published, and it is the first thing an external examiner will check.
 **Repair:** run the pipeline in §11 (one command), commit the *metrics* and the
 *class map*, and keep weights in a release asset or Git-LFS, never in the plan
 `.gitignore`.
+
+> **Status: fixed.** `smart_bin/runs/bingenie_mnv3s_128/` now contains `best.pt`
+> (6.2 MB), an ONNX export with its sidecar, `history.json`, `metrics_test.json`,
+> `training_curves.png` and `confusion_matrix_test.png`, all committed. `.gitignore`
+> was changed to keep exactly this one run and to ignore every other weight file.
+> The Appendix I sentence is now true — verify with `git ls-files '*.pt' '*.onnx'`.
 
 ### A-2 · The training figures were generated from random numbers
 
@@ -589,53 +595,53 @@ simulated, and every figure is reproducible with the three commands in §10.
 | Input | 128 × 128 RGB, ImageNet mean/std stored in the checkpoint |
 | Optimiser | AdamW, lr 2e-3, 3 warm-up epochs + cosine decay, weight decay 0.02 |
 | Augmentation | RandomResizedCrop(0.7–1.0), h-flip, ±15° rotation, colour jitter, random erasing |
-| Epochs | 110 (39.7 min, 21.7 s/epoch on 2 cores) |
-| Best epoch | 101 |
-| Best validation accuracy | **80.79 %** |
-| Final training accuracy | 95.34 % (the gap to validation is the honest over-fit signal a real run shows and a simulated one never does) |
+| Epochs | 110 (45.1 min, 24.6 s/epoch on 2 cores) |
+| Best epoch | 104 |
+| Best validation accuracy | **80.49 %** |
+| Final training accuracy | 93.86 % (the gap to validation is the honest over-fit signal a real run shows and a simulated one never does) |
 | Checkpoint size | 6.2 MB |
 
 ### 11.2 Held-out test set (431 images, never seen in training)
 
 | Metric | Value |
 |---|---|
-| Top-1 accuracy | **81.67 %** (95 % Wilson CI 77.74 – 85.04 %) |
-| Top-3 accuracy | 94.90 % |
-| Macro F1 | 80.01 % |
-| **Routing accuracy** (item reached the correct compartment) | **95.82 %** (CI 93.50 – 97.34 %) |
+| Top-1 accuracy | **78.89 %** (95 % Wilson CI 74.79 – 82.48 %) |
+| Top-3 accuracy | 94.66 % |
+| Macro F1 | 76.35 % |
+| **Routing accuracy** (item reached the correct compartment) | **94.90 %** (CI 92.39 – 96.61 %) |
 | Items sent to residual by the fail-safe | 0.93 % |
-| Mean confidence | 0.834 |
-| Expected calibration error (10 bins) | 0.040 |
-| Inference latency, CPU, batch-32 | 1.6 ms/image |
+| Mean confidence | 0.821 |
+| Expected calibration error (10 bins) | 0.055 |
+| Inference latency, CPU, batch-32 | 1.8 ms/image |
 
 ### 11.3 Per class
 
 | Class | Support | Precision | Recall | F1 | Mean confidence |
 |---|---|---|---|---|---|
-| cardboard | 70 | 85.53 % | 92.86 % | 89.04 % | 0.876 |
-| glass | 82 | 73.49 % | 74.39 % | 73.94 % | 0.800 |
-| metal | 68 | 76.81 % | 77.94 % | 77.37 % | 0.830 |
-| paper | 108 | 87.39 % | 89.81 % | 88.58 % | 0.839 |
-| plastic | 74 | 80.82 % | 79.73 % | 80.27 % | 0.859 |
-| trash | 29 | 89.47 % | 58.62 % | 70.83 % | 0.755 |
+| cardboard | 70 | 89.06 % | 81.43 % | 85.07 % | 0.858 |
+| glass | 82 | 70.65 % | 79.27 % | 74.71 % | 0.811 |
+| metal | 68 | 71.83 % | 75.00 % | 73.38 % | 0.772 |
+| paper | 108 | 88.57 % | 86.11 % | 87.32 % | 0.843 |
+| plastic | 74 | 75.64 % | 79.73 % | 77.63 % | 0.848 |
+| trash | 29 | 71.43 % | 51.72 % | 60.00 % | 0.721 |
 
 The confusion matrix (`runs/bingenie_mnv3s_128/confusion_matrix_test.png`) shows
-where the model actually fails: glass ↔ metal (20 of 150 errors) and
-cardboard → paper. That is exactly the physical failure you would predict —
+where the model actually fails: metal ↔ glass (16 of 91 errors) and
+cardboard/plastic/trash → glass (18 more, six each). That is exactly the physical failure you would predict —
 transparent, specular materials — and it is the argument for the inductive sensor
 being in the bill of materials.
 
 ### 11.4 What these numbers mean for the report
 
-* **81.67 % top-1 is the honest baseline for a from-scratch model on 1,768
+* **78.89 % top-1 is the honest baseline for a from-scratch model on 1,768
   training images.** It is *below* the report's 95.42 %, and that is the point:
   the report's number is not reproducible from this repository, whereas this one
   is.
-* **The product metric is 95.82 %**, because five of the six classes route to the
+* **The product metric is 94.90 %**, because five of the six classes route to the
   same compartment: a plastic bottle called glass still lands in the yellow bin.
   This is the number that should be quoted as "routing accuracy" — and the report
   should state it that way, with its confidence interval.
-* **`trash` recall (58.62 %) is the weakest point**, matching the report's own
+* **`trash` recall (51.72 %) is the weakest point**, matching the report's own
   observation that residual-stream behaviour is under-tested (137 training images
   against 594 for paper).
 * **Transfer learning is the upgrade path**: `train_real.py --pretrained` uses
@@ -647,6 +653,10 @@ being in the bill of materials.
 ```
 smart_bin/runs/bingenie_mnv3s_128/
 ├── best.pt                    6.2 MB   weights + class names + pre-processing
+├── bingenie_mnv3s_128.onnx    6.1 MB   fp32 export (+ .json sidecar: labels, imgsz, mean/std)
+├── bingenie_mnv3s_128_int8.onnx 1.7 MB  the artefact the demo serves
+├── onnx_verify.json           1.5 KB   float-vs-deployed agreement test (§11.6)
+├── metrics_deployed_test.json 2.4 KB   the shipped artefact scored on the test split
 ├── summary.json               1.1 KB   full training configuration and timings
 ├── history.json               8.4 KB   per-epoch loss / accuracy  (real values)
 ├── training_curves.png      129.9 KB   Fig. 6.2 replacement
@@ -656,9 +666,57 @@ smart_bin/runs/bingenie_mnv3s_128/
 ```
 
 The annotated prediction grid in `docs/demo_predictions.jpg` was produced by
-`smart_bin/predict.py` on twelve test images: 9 of 12 correct, and all three errors
-are *within* the recyclable compartment, which is why routing accuracy (95.8 %) is
-so much higher than top-1 (81.7 %).
+`tools/make_demo_grid.py` on twelve test images with the shipped int8 export:
+**11 of 12 correct**. The single miss is a `trash` item called `glass` at 86 %
+confidence - a cross-stream error, i.e. one the fail-safe cannot catch, and the
+clearest illustration of why `trash` recall (51.7 %) is the number to watch. Six of
+the correct calls are still within-stream confusions (paper called cardboard and
+so on), which is why routing accuracy (94.9 %) is so much higher than top-1
+(78.9 %).
+
+### 11.6 The artefact that actually ships (no PyTorch)
+
+The numbers above were measured with the PyTorch training stack. The demo does not
+run that stack: it runs the ONNX export. Quoting the training numbers for the
+shipped model is the same "which model are you describing?" mistake the original
+report made five times, so `tools/verify_deployment.py` re-scores the deployed
+artefact with **numpy + pillow + onnxruntime only** - the script imports no torch
+at all, and it refuses to start if it would have to.
+
+| Deployed artefact | Value |
+|---|---|
+| `bingenie_mnv3s_128_int8.onnx` | 1.70 MB (fp32 export: 6.1 MB) |
+| Top-1 accuracy on the 431-image test split | **78.65 %** (95 % CI 74.54 - 82.26 %) |
+| Routing accuracy | **94.90 %** |
+| Top-3 / macro F1 | 94.90 % / 76.20 % |
+| Items sent to residual | 0.93 % |
+| Mean confidence / ECE(10) | 0.8215 / 0.0625 |
+| End-to-end latency, 2 CPU cores | 30.6 ms/image (pre-processing included) |
+| Cost of the difference vs PyTorch | **-0.24 pp top-1, 0.00 pp routing** |
+
+The float-versus-deployed agreement test (`onnx_verify.json`) replays the whole
+test split through both pipelines with the *same* pre-processing function:
+
+| Comparison | Top-1 agreement | Mean probability delta | Flipped predictions |
+|---|---|---|---|
+| PyTorch vs ONNX fp32 | 429/431 = 99.54 % | 0.0015 | 2 |
+| PyTorch vs ONNX int8 | 427/431 = 99.07 % | 0.0065 | 4 |
+
+That table replaces the report's unmeasured claim of "≈0.9 pp quantisation loss":
+the measured cost of int8 is 0.24 pp of top-1 and nothing at all in routing
+accuracy. It also documents a bug worth knowing about - PIL's `BILINEAR` resize is
+*not* torchvision's antialiased bilinear, and with the two swapped the deployed
+model flipped 10 of 431 predictions (measured, not estimated) while reporting the
+same aggregate accuracy. `backends.py` now reproduces torchvision's filter
+numerically (max pixel difference 1.75e-02 in normalised units, i.e. one 8-bit
+level) and the flip count fell to 2.
+
+**Cold start.** With the export committed, `python tools/bootstrap.py --serve`
+installs 48 MB of wheels (numpy, pillow, onnxruntime; 190 MB installed) instead of
+the 5.7 GB training environment, and the server answers its first request in under
+a second. Verified here by serving the app from a torch-free virtualenv:
+`/tmp/rt_venv` has no torch, and `predict.py --backend onnx` completes a full
+prediction in 0.36 s including interpreter start-up.
 
 ---
 

@@ -59,6 +59,25 @@ def run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ---------------------------------------------------------------------------
 # 0. re-exec inside the virtualenv
 # ---------------------------------------------------------------------------
+RUNTIME_PACKAGES = ["numpy", "pillow", "onnxruntime"]
+RUNTIME_PROBE = "import numpy, PIL, onnxruntime"
+FULL_PROBE = "import torch, torchvision, PIL, numpy, matplotlib"
+
+
+def shipped_onnx() -> Path | None:
+    """The committed ONNX export, if this checkout has one."""
+    candidates = sorted(RUNS.glob("*/*.onnx"), key=lambda p: p.stat().st_mtime, reverse=True)
+    preferred = [p for p in candidates if p.stem.endswith("_int8")] or candidates
+    return preferred[0] if preferred else None
+
+
+def wants_runtime_only(args: argparse.Namespace) -> bool:
+    """Serving an already-exported model needs no training stack at all."""
+    if args.full or args.retrain:
+        return False
+    return bool(args.serve or args.dry_run) and shipped_onnx() is not None
+
+
 def ensure_venv_and_reexec(args: argparse.Namespace) -> None:
     """Create/refresh .venv, then restart this script with the venv interpreter."""
     if Path(sys.prefix).resolve() == VENV.resolve():
@@ -68,21 +87,30 @@ def ensure_venv_and_reexec(args: argparse.Namespace) -> None:
         log("re-entering the existing virtualenv")
         os.execv(str(VENV_PY), [str(VENV_PY), str(Path(__file__).resolve()), *sys.argv[1:]])
 
+    probe_needed = RUNTIME_PROBE if wants_runtime_only(args) else FULL_PROBE
+    if args.dry_run and subprocess.run([str(VENV_PY), "-c", probe_needed],
+                                       capture_output=True).returncode != 0:
+        # A dry run is read-only: never download a gigabyte just to print a plan.
+        log(f"would create {VENV} and install "
+            f"{'numpy + pillow + onnxruntime' if wants_runtime_only(args) else 'the training stack'}")
+        return
+
     if not VENV_PY.exists():
         log(f"creating virtualenv at {VENV}")
         run([sys.executable, "-m", "venv", str(VENV)])
 
-    have_torch = subprocess.run(
-        [str(VENV_PY), "-c", "import torch, torchvision, PIL, numpy, matplotlib"],
-        capture_output=True,
-    ).returncode == 0
-
-    if have_torch:
+    runtime_only = wants_runtime_only(args)
+    probe = RUNTIME_PROBE if runtime_only else FULL_PROBE
+    if subprocess.run([str(VENV_PY), "-c", probe], capture_output=True).returncode == 0:
         log("dependencies already installed")
     else:
         run([str(VENV_PY), "-m", "pip", "install", "--quiet", "--upgrade", "pip"])
-        log("installing dependencies (this is the slow step, a few minutes)")
-        run([str(VENV_PY), "-m", "pip", "install", "--quiet", "-r", str(REPO / "requirements.txt")])
+        if runtime_only:
+            log("installing the inference runtime only (numpy + pillow + onnxruntime, 48 MB of wheels)")
+            run([str(VENV_PY), "-m", "pip", "install", "--quiet", *RUNTIME_PACKAGES])
+        else:
+            log("installing the full stack (torch + torchvision, a few minutes and ~1 GB)")
+            run([str(VENV_PY), "-m", "pip", "install", "--quiet", "-r", str(REPO / "requirements.txt")])
 
     os.execv(str(VENV_PY), [str(VENV_PY), str(Path(__file__).resolve()), *sys.argv[1:]])
 
@@ -139,7 +167,7 @@ def verify(checkpoint: Path) -> None:
     else:
         log("no metrics_test.json for this run - run evaluate_real.py to create it")
 
-    log("running the 13-check smoke test")
+    log("running the smoke test")
     result = subprocess.run([sys.executable, str(REPO / "tools" / "smoke_test.py"), "--skip-server"],
                             capture_output=True, text=True)
     tail = [line for line in result.stdout.splitlines() if line.startswith(("[PASS]", "[FAIL]", "13", "1", "0"))]
@@ -149,12 +177,28 @@ def verify(checkpoint: Path) -> None:
         log("smoke test reported failures - see tools/smoke_test.py output above")
 
 
-def serve(port: int, checkpoint: Path) -> None:
-    log(f"serving the demo on http://0.0.0.0:{port}  (checkpoint {checkpoint.parent.name})")
-    subprocess.run(
-        [sys.executable, "-u", str(SMART_BIN / "app.py"), "--port", str(port), "--checkpoint", str(checkpoint)],
-        cwd=str(REPO),
-    )
+def export(checkpoint: Path) -> Path:
+    """Export the checkpoint to ONNX so later runs need no training stack."""
+    log("exporting to onnx (fp32 + int8) and verifying float-vs-deployed agreement")
+    run([sys.executable, str(SMART_BIN / "onnx_export.py"),
+         "--checkpoint", str(checkpoint), "--int8",
+         "--report", str(checkpoint.parent / "onnx_verify.json")], cwd=str(REPO))
+    exported = shipped_onnx()
+    if exported is None:
+        raise SystemExit("[bootstrap] export finished but no .onnx was written")
+    return exported
+
+
+def serve(port: int, checkpoint: Path | None, onnx_model: Path | None) -> None:
+    """Serve the exported ONNX model when there is one, else the checkpoint."""
+    command = [sys.executable, "-u", str(SMART_BIN / "app.py"), "--port", str(port)]
+    if onnx_model is not None:
+        command += ["--backend", "onnx", "--onnx", str(onnx_model)]
+        log(f"serving the demo on http://0.0.0.0:{port}  (onnx {onnx_model.name})")
+    else:
+        command += ["--checkpoint", str(checkpoint)]
+        log(f"serving the demo on http://0.0.0.0:{port}  (checkpoint {checkpoint.parent.name})")
+    subprocess.run(command, cwd=str(REPO))
 
 
 def main() -> int:
@@ -165,6 +209,8 @@ def main() -> int:
     parser.add_argument("--quick", action="store_true", help="use the shorter 30-epoch recipe")
     parser.add_argument("--skip-install", action="store_true", help="reuse .venv without checking packages")
     parser.add_argument("--no-verify", action="store_true", help="skip the smoke test")
+    parser.add_argument("--full", action="store_true",
+                        help="install the training stack even when only serving")
     parser.add_argument("--dry-run", action="store_true",
                         help="report what is missing and exit without training or serving")
     args = parser.parse_args()
@@ -174,14 +220,19 @@ def main() -> int:
     if not SMART_BIN.exists():
         raise SystemExit(f"[bootstrap] cannot find {SMART_BIN}")
 
-    ensure_dataset()
-
-    checkpoint = None if args.retrain else find_checkpoint()
+    checkpoint = find_checkpoint()
+    onnx_model = shipped_onnx()
+    needs_data = args.retrain or (checkpoint is None and onnx_model is None)
+    if needs_data:
+        ensure_dataset()
+    else:
+        log("dataset not required for serving (pass --retrain to rebuild it)")
 
     if args.dry_run:
         log(f"virtualenv : {VENV} (ready)")
-        log(f"dataset    : {'ready' if (SMART_BIN / 'datasets' / 'trashnet' / 'train').exists() else 'MISSING'}")
-        log(f"checkpoint : {checkpoint.relative_to(REPO) if checkpoint else 'MISSING - would train'}")
+        log(f"dataset    : {'ready' if (SMART_BIN / 'datasets' / 'trashnet' / 'train').exists() else 'not downloaded'}")
+        log(f"onnx model : {onnx_model.relative_to(REPO) if onnx_model else 'none (repo has no export)'}")
+        log(f"checkpoint : {checkpoint.relative_to(REPO) if checkpoint else 'none (would train)'}")
         log("dry run: nothing trained, nothing served")
         return 0
 
@@ -190,11 +241,16 @@ def main() -> int:
     else:
         log(f"checkpoint present: {checkpoint.relative_to(REPO)}")
 
+    if onnx_model is None:
+        onnx_model = export(checkpoint)
+    else:
+        log(f"onnx present: {onnx_model.relative_to(REPO)}")
+
     if not args.no_verify:
         verify(checkpoint)
 
     if args.serve:
-        serve(args.port, checkpoint)
+        serve(args.port, checkpoint, onnx_model)
     else:
         log("done. start the demo with:  python smart_bin/app.py   (or: --serve)")
     return 0

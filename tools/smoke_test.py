@@ -6,7 +6,7 @@ Checks, in order:
   1. the routing table covers every class of the trained checkpoint,
   6. the fusion layer passes its own self-test,
   3. the dataset split exists and the test partition is non-empty,
-  4. the checkpoint loads and reproduces a pre-processing config,
+  4. an inference backend is available (ONNX export preferred, PyTorch fallback),
   5. a real test image produces a valid decision + probability simplex,
   6. the HTTP demo answers /api/info, /api/samples and /api/predict.
 
@@ -48,6 +48,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8099)
     parser.add_argument("--skip-server", action="store_true")
     parser.add_argument("--checkpoint", type=Path, default=None)
+    parser.add_argument("--onnx", type=Path, default=None)
+    parser.add_argument("--backend", choices=["auto", "onnx", "torch"], default="auto")
     args = parser.parse_args()
 
     # 1. routing table ----------------------------------------------------
@@ -64,41 +66,51 @@ def main() -> int:
     fusion = subprocess.run([sys.executable, str(SMART_BIN / "fusion.py")], capture_output=True, text=True)
     report("fusion self-test", fusion.returncode == 0, fusion.stdout.strip().splitlines()[-1] if fusion.stdout else "")
 
-    # 3. dataset ----------------------------------------------------------
+    # 3. dataset (only needed when a model has to be trained from it) -------
     from dataset import TRASHNET_DIR, dataset_summary
 
     summary = dataset_summary(TRASHNET_DIR) if TRASHNET_DIR.exists() else {}
     has_splits = all(split in summary for split in ("train", "val", "test"))
-    report("dataset splits present", has_splits, str({k: v for k, v in summary.items() if k in ("train", "val", "test")}))
-    if not has_splits:
-        print("\nRun `python smart_bin/dataset.py` first.")
+    report("dataset splits present", has_splits,
+           str({k: v for k, v in summary.items() if k in ("train", "val", "test")})
+           if has_splits else "not downloaded (fine for serving an exported model)")
+
+    # 4. model backend ----------------------------------------------------
+    # Prefers the exported ONNX model, so this test validates the artefact that
+    # actually deploys - and runs on a machine with no PyTorch at all.
+    from backends import make_backend
+    from PIL import Image
+
+    try:
+        backend = make_backend(args.backend, checkpoint=args.checkpoint, onnx_path=args.onnx, threads=2)
+    except SystemExit as exc:
+        report("model backend available", False, str(exc).replace("\n", " ")[:120])
+        print("\nFix: python tools/bootstrap.py")
         return 1
-
-    # 4. checkpoint -------------------------------------------------------
-    from model import load_checkpoint, eval_transform
-
-    checkpoint = args.checkpoint
-    if checkpoint is None:
-        candidates = sorted((SMART_BIN / "runs").glob("*/best.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if not candidates:
-            report("checkpoint found", False, "no smart_bin/runs/*/best.pt")
-            return 1
-        checkpoint = candidates[0]
-    model, labels, imgsz = load_checkpoint(checkpoint)
-    report("checkpoint loads", True, f"{checkpoint.parent.name} ({imgsz}px, {len(labels)} classes)")
+    labels = backend.labels
+    imgsz = backend.imgsz
+    report("model backend available", True, backend.describe())
     unmapped = unknown_classes(labels)
-    report("every checkpoint class has a compartment", not unmapped, f"unmapped: {unmapped}" if unmapped else "")
+    report("every model class has a compartment", not unmapped, f"unmapped: {unmapped}" if unmapped else "")
 
     # 5. inference --------------------------------------------------------
-    from PIL import Image
-    import torch
+    if has_splits:
+        test_image = next((TRASHNET_DIR / "test").rglob("*.jpg"))
+    else:
+        from app import collect_samples  # type: ignore
 
-    test_image = next((TRASHNET_DIR / "test").rglob("*.jpg"))
-    tensor = eval_transform(imgsz)(Image.open(test_image).convert("RGB")).unsqueeze(0)
-    with torch.no_grad():
-        probs = model(tensor).softmax(1).squeeze(0).numpy()
+        test_image = None
+    if test_image is None or not Path(test_image).exists():
+        # fall back to an image shipped with the repo
+        candidates = sorted(Path(REPO / "docs").glob("*.jpg"))
+        if not candidates:
+            report("a test image is available", False, "no dataset and no docs/*.jpg")
+            return 1
+        test_image = candidates[0]
+
+    probs = np.asarray(backend.probabilities(Image.open(test_image)))
     report("probabilities sum to 1", abs(float(probs.sum()) - 1.0) < 1e-4, f"sum={probs.sum():.6f}")
-    report("output length matches labels", len(probs) == len(labels))
+    report("output length matches labels", len(probs) == len(labels), f"{len(probs)} outputs")
 
     from fusion import SensorReading, decide
 
@@ -107,8 +119,7 @@ def main() -> int:
     report(
         "decision is valid",
         bool(valid),
-        f"{decision.label} -> {decision.compartment} ({decision.stream}) "
-        f"{decision.confidence:.2f}",
+        f"{decision.label} -> {decision.compartment} ({decision.stream}) {decision.confidence:.2f}",
     )
 
     # 6. HTTP demo --------------------------------------------------------
@@ -118,7 +129,7 @@ def main() -> int:
         from predict import Classifier
 
         demo.THRESHOLD = 0.40
-        demo.CLASSIFIER = Classifier(checkpoint)
+        demo.CLASSIFIER = Classifier(args.checkpoint, backend=args.backend, onnx=args.onnx)
         demo.SAMPLES = demo.collect_samples()
 
         from http.server import ThreadingHTTPServer

@@ -1,7 +1,8 @@
 """
 BinGenie - live demo server for the trained classifier.
 
-A single-file, dependency-light web app (Python standard library + PyTorch):
+A single-file, dependency-light web app (Python standard library + ONNX Runtime
+or PyTorch):
 
     python app.py                 # http://0.0.0.0:8000
     python app.py --port 8080 --threshold 0.45
@@ -241,7 +242,7 @@ async function boot() {
   $('info').innerHTML = `
     <div>checkpoint <code>${info.checkpoint}</code> · ${info.model} · ${info.imgsz}px · classes ${info.labels.join(', ')}</div>
     <table>
-      <tr><th>metric (held-out test split)</th><th>value</th></tr>
+      <tr><th>metric</th><th>value</th></tr>
       <tr><td>top-1 accuracy</td><td><strong>${info.metrics.top1_accuracy_pct ?? 'n/a'}</strong></td></tr>
       <tr><td>top-3 accuracy</td><td>${info.metrics.top3_accuracy_pct ?? 'n/a'}</td></tr>
       <tr><td>macro F1</td><td>${info.metrics.macro_f1_pct ?? 'n/a'}</td></tr>
@@ -249,6 +250,7 @@ async function boot() {
       <tr><td>items sent to residual</td><td>${info.metrics.residual_rate_pct ?? 'n/a'}</td></tr>
       <tr><td>images evaluated</td><td>${info.metrics.images ?? 'n/a'}</td></tr>
     </table>
+    <div style="margin-top:6px">measured on ${info.metrics.measured_on ?? 'the PyTorch checkpoint'}, held-out test split</div>
     <div style="margin-top:8px">${info.note}</div>`;
   SAMPLES = (await (await fetch('api/samples')).json()).samples;
   const byClass = {};
@@ -328,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
                     "decision": decision.as_dict(),
                     "ranking": [[name, round(prob, 4)] for name, prob in ranking[:6]],
                     "latency_ms": round(getattr(decision, "latency_ms", 0.0), 1),
-                    "runtime": "CPU, PyTorch",
+                    "runtime": CLASSIFIER.runtime_label,
                     "checkpoint": CLASSIFIER.checkpoint.name,
                 }
             )
@@ -365,11 +367,19 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _info():
-        checkpoint = CLASSIFIER.checkpoint
-        metrics_path = checkpoint.parent / "metrics_test.json"
+        artifact = CLASSIFIER.checkpoint
+        # When the shipped artefact has its own measurement, show *that* one: the
+        # demo runs the ONNX export, so quoting the PyTorch numbers here would be
+        # the same "which model are you describing?" mistake as the report's five
+        # different accuracies.
+        deployed = artifact.parent / "metrics_deployed_test.json"
+        metrics_path = deployed if (deployed.exists() and artifact.suffix == ".onnx") else artifact.parent / "metrics_test.json"
         metrics = {}
+        measured_on = "PyTorch checkpoint"
         if metrics_path.exists():
             raw = json.loads(metrics_path.read_text())
+            if metrics_path == deployed:
+                measured_on = f"the shipped artefact ({raw.get('backend', 'onnx')})"
             metrics = {
                 "top1_accuracy_pct": f"{raw['top1_accuracy'] * 100:.2f} % "
                                      f"(95 % CI {raw['top1_ci95'][0] * 100:.2f}-{raw['top1_ci95'][1] * 100:.2f})",
@@ -378,9 +388,15 @@ class Handler(BaseHTTPRequestHandler):
                 "routing_accuracy_pct": f"{raw['routing_accuracy_streams'] * 100:.2f} %",
                 "residual_rate_pct": f"{raw['residual_rate'] * 100:.2f} %",
                 "images": raw["images"],
+                "measured_on": measured_on,
             }
+        try:
+            artifact_label = str(artifact.relative_to(BASE_DIR.parent))
+        except ValueError:
+            artifact_label = str(artifact)
         return {
-            "checkpoint": str(checkpoint.relative_to(BASE_DIR.parent)),
+            "checkpoint": artifact_label,
+            "backend": CLASSIFIER.describe(),
             "model": "MobileNetV3-Small (trained here, no cloud)",
             "imgsz": CLASSIFIER.imgsz,
             "labels": CLASSIFIER.labels,
@@ -416,7 +432,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="BinGenie demo server")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--checkpoint", type=Path, default=None)
+    parser.add_argument("--checkpoint", type=Path, default=None, help="best.pt (PyTorch) to serve")
+    parser.add_argument("--onnx", type=Path, default=None, help="explicit ONNX model + .json sidecar")
+    parser.add_argument("--backend", choices=["auto", "onnx", "torch"], default="auto",
+                        help="auto prefers ONNX (small dependency footprint), then PyTorch")
     parser.add_argument("--threshold", type=float, default=0.40)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--tta", action="store_true")
@@ -425,13 +444,14 @@ def main() -> int:
     from predict import Classifier  # local import keeps --help fast
 
     THRESHOLD = args.threshold
-    CLASSIFIER = Classifier(args.checkpoint, threads=args.threads, tta=args.tta)
+    CLASSIFIER = Classifier(args.checkpoint, threads=args.threads, tta=args.tta,
+                            backend=args.backend, onnx=args.onnx)
     SAMPLES = collect_samples()
 
     print("=" * 62)
     print("  BinGenie demo")
     print("=" * 62)
-    print(f"  checkpoint : {CLASSIFIER.checkpoint}")
+    print(f"  backend    : {CLASSIFIER.describe()}")
     print(f"  classes    : {CLASSIFIER.labels}")
     print(f"  samples    : {len(SAMPLES)} test images")
     print(f"  listening  : http://{args.host}:{args.port}")

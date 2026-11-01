@@ -49,11 +49,11 @@
   },
   "train_images": 1768,
   "val_images": 328,
-  "best_epoch": 101,
-  "best_val_acc": 0.8079,
-  "final_train_acc": 0.95341,
+  "best_epoch": 104,
+  "best_val_acc": 0.8049,
+  "final_train_acc": 0.93864,
   "final_val_acc": 0.79573,
-  "train_seconds": 2495.3,
-  "seconds_per_epoch": 22.7,
+  "train_seconds": 2705.8,
+  "seconds_per_epoch": 24.6,
   "checkpoint": "runs/bingenie_mnv3s_128/best.pt"
 }

@@ -22,9 +22,20 @@ import json
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
-import torch
-import torch.nn as nn
-from torchvision import models, transforms
+def _torch_stack():
+    """Import the training stack only when a function actually needs it.
+
+    This module also owns `MEAN`/`STD` and re-exports the routing tables, and the
+    ONNX inference path imports it.  A module-level `import torch` therefore made
+    "inference without PyTorch" impossible: the app died with `ModuleNotFoundError:
+    torch` even though it never touches a tensor.  Keeping the import local is what
+    lets a deployment install 48 MB of wheels instead of 5.7 GB.
+    """
+    import torch
+    import torch.nn as nn
+    from torchvision import models, transforms
+
+    return torch, nn, models, transforms
 
 # ---------------------------------------------------------------------------
 # Reproducible image statistics (ImageNet).  Using fixed constants instead of
@@ -51,6 +62,7 @@ def build_model(name: str, num_classes: int, pretrained: bool = False) -> nn.Mod
     to random initialisation and tell the user, rather than crashing or - worse
     - silently training a randomly-initialised "pretrained" model.
     """
+    torch, nn, models, transforms = _torch_stack()
     if name not in SUPPORTED_MODELS:
         raise ValueError(f"Unknown model '{name}'. Choose from {SUPPORTED_MODELS}")
 
@@ -88,6 +100,7 @@ def train_transform(imgsz: int, scale_min: float = 0.55, rotation: int = 20) -> 
     condition the bin really meets: the item can land rotated, at a different
     scale, at a different distance, under a different white balance.
     """
+    _, _, _, transforms = _torch_stack()
     return transforms.Compose(
         [
             transforms.RandomResizedCrop(imgsz, scale=(scale_min, 1.0), ratio=(0.75, 1.33)),
@@ -103,6 +116,7 @@ def train_transform(imgsz: int, scale_min: float = 0.55, rotation: int = 20) -> 
 
 def eval_transform(imgsz: int) -> transforms.Compose:
     """Deterministic pre-processing used for validation, test and deployment."""
+    _, _, _, transforms = _torch_stack()
     resize = int(round(imgsz / 0.875))  # same ratio torchvision uses (224 <- 256)
     return transforms.Compose(
         [
@@ -132,6 +146,7 @@ def save_checkpoint(
     imgsz: int,
     extra: Dict[str, object] | None = None,
 ) -> None:
+    torch, _, _, _ = _torch_stack()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "state_dict": model.state_dict(),
@@ -147,6 +162,7 @@ def save_checkpoint(
 
 def load_checkpoint(path: Path, device: str = "cpu") -> Tuple[nn.Module, List[str], int]:
     """Rebuild a trained model from a checkpoint written by save_checkpoint()."""
+    torch, _, _, _ = _torch_stack()
     payload = torch.load(path, map_location=device, weights_only=False)
     labels = payload["labels"]
     model = build_model(payload["model_name"], len(labels), pretrained=False)

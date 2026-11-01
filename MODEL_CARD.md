@@ -58,18 +58,34 @@ Filled in by `smart_bin/evaluate_real.py` on the held-out test split:
 
 | Metric (held-out test split, 431 images) | Value |
 |---|---|
-| Top-1 accuracy | 81.67 % (95 % CI 77.74 – 85.04 %) |
-| Top-3 accuracy | 94.90 % |
-| Macro F1 | 80.01 % |
-| Routing accuracy (correct compartment) | 95.82 % (CI 93.50 – 97.34 %) |
+| Top-1 accuracy | 78.89 % (95 % CI 74.79 – 82.48 %) |
+| Top-3 accuracy | 94.66 % |
+| Macro F1 | 76.35 % |
+| Routing accuracy (correct compartment) | 94.90 % (CI 92.39 – 96.61 %) |
 | Items refused to residual | 0.93 % |
-| Expected calibration error (10 bins) | 0.040 |
-| Latency (CPU, 2 threads, batch 32) | 1.6 ms/image |
-| Validation accuracy (best epoch 101) | 80.79 % |
+| Expected calibration error (10 bins) | 0.055 |
+| Latency (CPU, 2 threads, batch 32) | 1.8 ms/image |
+| Validation accuracy (best epoch 104) | 80.49 % |
 
-Per-class recall: cardboard 92.9 %, paper 89.8 %, plastic 79.7 %, metal 77.9 %,
-glass 74.4 %, **trash 58.6 %**. Full detail in
+Per-class recall: paper 86.1 %, cardboard 81.4 %, plastic 79.7 %, glass 79.3 %,
+metal 75.0 %, **trash 51.7 %** (CI 34.4 – 68.6 %). Full detail in
 `smart_bin/runs/bingenie_mnv3s_128/metrics_test.json`.
+
+### 4.1 The artefact that ships
+
+| Metric (same 431 images, int8 ONNX, no PyTorch) | Value |
+|---|---|
+| Top-1 accuracy | 78.65 % (95 % CI 74.54 – 82.26 %) |
+| Routing accuracy | 94.90 % |
+| Macro F1 | 76.20 % |
+| Model size | 1.70 MB |
+| Latency, 2 cores, pre-processing included | 30.6 ms/image |
+| Agreement with the PyTorch pipeline | 427/431 predictions (99.07 %) |
+
+Produced by `tools/verify_deployment.py`, which imports no PyTorch; the file
+`metrics_deployed_test.json` is the source. **Quote these numbers when describing
+the demo**, and the §4 numbers when describing the training result — never mix the
+two, which is exactly the error the original report made.
 
 Report accuracy **with its confidence interval**. With 431 test images the
 interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
@@ -80,7 +96,8 @@ interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
    is the configuration to quote for comparison with the literature.
 2. Domain: white-background studio images. Performance on a kitchen bin with a
    grey plastic cup background, partial occlusion and dim light is unmeasured.
-3. Class imbalance: `trash` (137 images) has the weakest recall.
+3. Class imbalance: `trash` (91 training images) has the weakest recall, and only
+   29 test images support it, so its 51.7 % has a ±17 pp interval.
 4. No calibration on device data; the 0.40 threshold in `fusion.py` is a starting
    value, not a measured optimum. `evaluate_real.py` reports ECE so it can be tuned.
 5. 128 px input: fast, but unsuitable for fine material distinctions (foil vs paper).

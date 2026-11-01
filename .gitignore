@@ -15,16 +15,23 @@ smart_bin/runs/**
 !smart_bin/runs/**/training_curves.png
 !smart_bin/runs/**/confusion_matrix_*.png
 
-# Model weights: too large for a plain git repo. Publish them as a GitHub
-# release asset or with Git LFS, and record the download link in MODEL_CARD.md.
+# Model weights: large binaries do not belong in ordinary source control, with
+# one exception - the single shipped model of THIS run. Appendix I of the report
+# claims "the complete repository, including the trained weights"; keeping the
+# one deployable artefact here is what makes that sentence true. Everything else
+# (extra runs, experiments) is ignored.
 *.pt
 *.onnx
 *.tflite
+!smart_bin/runs/bingenie_mnv3s_128/best.pt
+!smart_bin/runs/bingenie_mnv3s_128/*.onnx
+!smart_bin/runs/bingenie_mnv3s_128/*.json
 
 # Runtime logs and generated plots
 logs/*.csv
 *.png
 !smart_bin/runs/**/*.png
+!docs/**/*.png
 
 # Local secrets and environment files
 .env

@@ -24,7 +24,13 @@ everything (virtualenv, dataset, checkpoint if missing, verification):
 python tools/bootstrap.py --serve        # … then open http://localhost:8000
 python tools/bootstrap.py --dry-run      # just say what is missing
 python tools/bootstrap.py --quick        # 30-epoch model if you are in a hurry
+python tools/bootstrap.py --full         # force the training stack even when only serving
 ```
+
+When the committed ONNX export is present, `--serve` installs **only**
+numpy + pillow + onnxruntime (48 MB of wheels, 190 MB installed) and boots in
+seconds; the 5.7 GB training stack is
+installed only when a model actually has to be produced.
 
 `bootstrap.py` is safe to re-run: every stage is skipped when it is already
 satisfied. The dataset (git-ignored), the virtualenv and the trained weights
@@ -86,13 +92,19 @@ instead of the from-scratch baseline.
 | `smart_bin/train_real.py` | training loop, real curves, history JSON |
 | `smart_bin/evaluate_real.py` | held-out evaluation with confidence intervals |
 | `smart_bin/fusion.py` | sensor fusion, fail-safe routing, self-tests |
+| `smart_bin/onnx_export.py` | ONNX export + float-versus-deployed verification |
+| `smart_bin/backends.py` | ONNX (light) and PyTorch inference backends |
 | `smart_bin/predict.py` | image / folder / video / camera inference CLI |
 | `smart_bin/app.py` | browser demo (standard-library HTTP server) |
 | `smart_bin/train.py`, `detect_smartbin.py`, `eval_per_class.py`, `analyze_runtime_bias.py` | legacy YOLOv8-cls path, kept working, bugs fixed |
-| `tools/verify_report_numbers.py` | 42 arithmetic checks against the report |
+| `tools/bootstrap.py` | one-command rebuild: env → dataset → weights → ONNX → demo |
+| `tools/verify_deployment.py` | scores the shipped ONNX artefact without PyTorch |
+| `tools/make_demo_grid.py` | the real prediction grid in `docs/demo_predictions.jpg` |
+| `tools/verify_report_numbers.py` | 42 arithmetic checks (20 pass against the submitted draft) |
 | `archive/simulated_plots/` | the scripts that fabricated the report's figures (archived, not deleted) |
+| `REPORT_REWRITE.md` | drop-in corrected text for every section the report gets wrong |
 | `logs/` | decision logs (CSV), git-ignored |
-| `smart_bin/runs/` | checkpoints + metrics per run (JSON/PNG committed, weights ignored) |
+| `smart_bin/runs/` | metrics/plots per run; the one shipped model's `best.pt` and `.onnx` are committed |
 
 ## Data
 
@@ -109,10 +121,10 @@ low-light and occlusion performance must be re-measured on a real field set.
 
 | Item | Status |
 |---|---|
-| Trained classifier | yes — MobileNetV3-Small, 128 px, trained from scratch for 110 epochs (80.8 % validation) |
-| Held-out evaluation | yes — 431 test images: **81.67 % top-1, 95.82 % routing**, see `smart_bin/runs/bingenie_mnv3s_128/metrics_test.json` |
+| Trained classifier | yes — MobileNetV3-Small, 128 px, 110 epochs from scratch (80.49 % validation); **weights committed** under `smart_bin/runs/bingenie_mnv3s_128/` |
+| Held-out evaluation | yes — 431 test images: **78.89 % top-1, 94.90 % routing** (`metrics_test.json`); the shipped int8 ONNX export scores **78.65 % / 94.90 %** (`metrics_deployed_test.json`) |
 | Browser demo | yes — `python smart_bin/app.py` |
-| Quantised on-device export (int8 / TFLite / ONNX) | **not yet** — Phase II item, needs a float-vs-int8 agreement test |
+| On-device export | **yes** — ONNX (fp32) + optional dynamic int8, with a float-vs-deployed agreement report (`onnx_export.py`) |
 | Moisture / inductive sensor fusion on hardware | logic implemented and tested; no sensor data exists yet |
 | Carousel control | **not in this repository** — the report's `carousel_control.py` was never committed |
 | 7-class organic / medical / e-waste model | **not yet** — requires a dataset that contains those classes |

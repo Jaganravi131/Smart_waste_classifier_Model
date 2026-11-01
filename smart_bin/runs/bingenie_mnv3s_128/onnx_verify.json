@@ -1,0 +1,22 @@
+{
+  "onnx": "smart_bin/runs/bingenie_mnv3s_128/bingenie_mnv3s_128.onnx",
+  "images": 431,
+  "onnx_top1": 0.7889,
+  "onnx_mean_confidence": 0.8202,
+  "torch_top1": 0.7889,
+  "top1_agreement": 0.9954,
+  "max_probability_delta": 0.05753,
+  "mean_probability_delta": 0.001547,
+  "flipped_predictions": 2,
+  "int8": {
+    "onnx": "smart_bin/runs/bingenie_mnv3s_128/bingenie_mnv3s_128_int8.onnx",
+    "images": 431,
+    "onnx_top1": 0.7865,
+    "onnx_mean_confidence": 0.8215,
+    "torch_top1": 0.7889,
+    "top1_agreement": 0.9907,
+    "max_probability_delta": 0.21044,
+    "mean_probability_delta": 0.006465,
+    "flipped_predictions": 4
+  }
+}

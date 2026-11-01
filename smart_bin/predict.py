@@ -32,11 +32,11 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 import numpy as np
-import torch
 from PIL import Image
 
+from backends import find_artifacts, make_backend
 from fusion import SensorReading, decide
-from model import STREAMS, eval_transform, load_checkpoint, stream_for
+from model import STREAMS, stream_for
 
 BASE_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BASE_DIR / "runs"
@@ -52,31 +52,51 @@ STREAM_COLORS = {  # BGR, matches the physical compartment colours
 
 
 def newest_checkpoint() -> Path:
-    candidates = sorted(RUNS_DIR.glob("*/best.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not candidates:
-        raise SystemExit("No trained checkpoint found. Run `python train_real.py` first.")
-    return candidates[0]
+    checkpoint, onnx_path = find_artifacts("auto")
+    if checkpoint is not None:
+        return checkpoint
+    if onnx_path is not None:
+        return onnx_path
+    raise SystemExit(
+        "No model found under smart_bin/runs (no best.pt and no .onnx).\n"
+        "  Fix: python tools/bootstrap.py        # rebuilds everything that is missing"
+    )
 
 
 class Classifier:
-    """Wraps the checkpoint so that every entry point pre-processes identically."""
+    """Thin wrapper so every entry point pre-processes and routes identically.
 
-    def __init__(self, checkpoint: Optional[Path] = None, threads: int = 2, tta: bool = False):
-        torch.set_num_threads(threads)
-        self.checkpoint = checkpoint or newest_checkpoint()
-        self.model, self.labels, self.imgsz = load_checkpoint(self.checkpoint)
-        self.transform = eval_transform(self.imgsz)
+    Inference is delegated to `backends.py`, which prefers the ONNX export (a
+    48 MB of wheels / 190 MB installed, ~1 s import) and falls back to PyTorch. That is
+    what lets the demo start on a machine that has never installed the training
+    stack - previously the app refused to start without a 1 GB PyTorch install
+    *and* a checkpoint that has to be trained for 40 minutes.
+    """
+
+    def __init__(self, checkpoint: Optional[Path] = None, threads: int = 2, tta: bool = False,
+                 backend: str = "auto", onnx: Optional[Path] = None):
+        self.backend = make_backend(backend, checkpoint=checkpoint, onnx_path=onnx, threads=threads)
+        self.labels = self.backend.labels
+        self.imgsz = self.backend.imgsz
+        self.checkpoint = Path(getattr(self.backend, "path", "onnx model"))
         self.tta = tta
-        for parameter in self.model.parameters():
-            parameter.requires_grad_(False)
+        if tta and getattr(self.backend, "kind", "") != "torch":
+            print("[predict] note: TTA is only implemented for the PyTorch backend; ignoring --tta")
+            self.tta = False
 
-    @torch.no_grad()
+    def describe(self) -> str:
+        return f"{self.backend.describe()}  ({self.checkpoint.name})"
+
+    @property
+    def runtime_label(self) -> str:
+        """What actually runs the forward pass - never assume PyTorch."""
+        kind = getattr(self.backend, "kind", "torch")
+        if kind == "onnx":
+            return "CPU, ONNX Runtime"
+        return "CPU, PyTorch"
+
     def probabilities(self, image: Image.Image) -> np.ndarray:
-        tensor = self.transform(image.convert("RGB")).unsqueeze(0)
-        logits = self.model(tensor).softmax(1)
-        if self.tta:
-            logits = (logits + self.model(torch.flip(tensor, dims=[3])).softmax(1)) / 2
-        return logits.squeeze(0).numpy()
+        return self.backend.probabilities(image)
 
     def classify(self, image: Image.Image, threshold: float = 0.40, margin: float = 0.0,
                  sensor: Optional[SensorReading] = None):
@@ -256,6 +276,8 @@ def main() -> int:
     source.add_argument("--camera", default=None, help="camera index or video path")
     source.add_argument("--video", type=Path)
     parser.add_argument("--checkpoint", type=Path, default=None)
+    parser.add_argument("--onnx", type=Path, default=None, help="explicit ONNX model (and .json sidecar)")
+    parser.add_argument("--backend", choices=["auto", "onnx", "torch"], default="auto")
     parser.add_argument("--threshold", type=float, default=0.40)
     parser.add_argument("--margin", type=float, default=0.0)
     parser.add_argument("--tta", action="store_true")
@@ -269,7 +291,9 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="emit decisions as JSON lines")
     args = parser.parse_args()
 
-    classifier = Classifier(args.checkpoint, threads=args.threads, tta=args.tta)
+    classifier = Classifier(args.checkpoint, threads=args.threads, tta=args.tta,
+                            backend=args.backend, onnx=args.onnx)
+    print(f"backend: {classifier.describe()}")
 
     if args.image:
         return run_images(classifier, [args.image], args)
