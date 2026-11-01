@@ -170,8 +170,12 @@ def verify(checkpoint: Path) -> None:
     log("running the smoke test")
     result = subprocess.run([sys.executable, str(REPO / "tools" / "smoke_test.py"), "--skip-server"],
                             capture_output=True, text=True)
-    tail = [line for line in result.stdout.splitlines() if line.startswith(("[PASS]", "[FAIL]", "13", "1", "0"))]
-    for line in tail[-4:]:
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    failures = [line for line in lines if line.startswith("[FAIL]")]
+    skips = [line for line in lines if line.startswith("[SKIP]")]
+    summary = lines[-1] if lines else "no output"
+    print(f"   {summary}")
+    for line in failures + skips:
         print("   " + line)
     if result.returncode != 0:
         log("smoke test reported failures - see tools/smoke_test.py output above")

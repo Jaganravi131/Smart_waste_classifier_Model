@@ -36,11 +36,23 @@ sys.path.insert(0, str(SMART_BIN))
 
 PASSED: list[str] = []
 FAILED: list[str] = []
+SKIPPED: list[str] = []
 
 
 def report(name: str, ok: bool, detail: str = "") -> None:
     (PASSED if ok else FAILED).append(name)
     print(f"[{'PASS' if ok else 'FAIL'}] {name}{(' - ' + detail) if detail else ''}")
+
+
+def skip(name: str, detail: str = "") -> None:
+    """A check that cannot run here but is not a defect.
+
+    A checkout that serves an exported model deliberately has no dataset - that
+    is the point of the ONNX path - so a missing dataset must not fail the suite
+    that is supposed to prove the deployment works.
+    """
+    SKIPPED.append(name)
+    print(f"[SKIP] {name}{(' - ' + detail) if detail else ''}")
 
 
 def main() -> int:
@@ -71,9 +83,11 @@ def main() -> int:
 
     summary = dataset_summary(TRASHNET_DIR) if TRASHNET_DIR.exists() else {}
     has_splits = all(split in summary for split in ("train", "val", "test"))
-    report("dataset splits present", has_splits,
-           str({k: v for k, v in summary.items() if k in ("train", "val", "test")})
-           if has_splits else "not downloaded (fine for serving an exported model)")
+    if has_splits:
+        report("dataset splits present",
+               True, str({k: v for k, v in summary.items() if k in ("train", "val", "test")}))
+    else:
+        skip("dataset splits present", "not downloaded (fine for serving an exported model)")
 
     # 4. model backend ----------------------------------------------------
     # Prefers the exported ONNX model, so this test validates the artefact that
@@ -162,7 +176,8 @@ def main() -> int:
             server.server_close()
 
     print()
-    print(f"{len(PASSED)} passed, {len(FAILED)} failed")
+    print(f"{len(PASSED)} passed, {len(FAILED)} failed"
+          + (f", {len(SKIPPED)} skipped" if SKIPPED else ""))
     if FAILED:
         print("failed checks: " + ", ".join(FAILED))
     return 0 if not FAILED else 1
