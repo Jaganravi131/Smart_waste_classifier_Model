@@ -215,7 +215,7 @@ comparison instead; this is it. Identical protocol for all three — same split,
 augmentation, 128 px, batch 32, AdamW at 2×10⁻³ with 3 warm-up epochs and cosine
 decay, weight decay 0.02, label smoothing 0.1, seed 42, **from scratch, no ImageNet
 weights** — and the same 30-epoch budget, because on two CPU cores that is already
-75 minutes of compute in total. The routing threshold is tuned per model on
+80 minutes of compute in total. The routing threshold is tuned per model on
 validation (`tools/arch_sweep.py`) rather than borrowed from the shipped run, for
 the reason established in §7.1.
 
