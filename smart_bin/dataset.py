@@ -56,8 +56,21 @@ def _download(url: str, dest: Path, timeout: int = 300) -> Path:
     return dest
 
 
+def _has_class_images(folder: Path) -> bool:
+    """True when `folder` looks like ImageFolder layout: <folder>/<class>/*.jpg."""
+    return folder.is_dir() and any(folder.glob("*/*.jpg"))
+
+
 def download_and_extract(dest: Path = DATA_ROOT / "raw") -> Path:
-    """Download the TrashNet tarball and return the folder holding the images."""
+    """Download the TrashNet tarball and return the folder holding the images.
+
+    Deliberately idempotent and tolerant of a half-finished previous attempt:
+    the image folder is chosen by *looking for class sub-folders that contain
+    images*, not by testing whether a directory path exists. The first version
+    tested `Path.exists()` on `data/images`, which is created by the zip
+    extraction itself, so a second run returned an empty folder and the split
+    builder failed with "No .jpg files under .../data/images".
+    """
     dest.mkdir(parents=True, exist_ok=True)
     tarball = dest / "trashnet.tar.gz"
     if not tarball.exists():
@@ -68,16 +81,57 @@ def download_and_extract(dest: Path = DATA_ROOT / "raw") -> Path:
         with tarfile.open(tarball) as tar:
             tar.extractall(dest)  # nosec - tarball comes from the fixed URL above
 
-    zip_path = extract_dir / "data" / "dataset-resized.zip"
-    images_root = extract_dir / "data" / "images"
-    if not images_root.exists() and zip_path.exists():
-        import zipfile
+    # Candidate locations, shallowest expected layout last.
+    candidates = [
+        extract_dir / "data" / "images" / "dataset-resized",
+        extract_dir / "data" / "dataset-resized",
+        extract_dir / "data" / "images",
+        extract_dir / "data",
+    ]
+    for candidate in candidates:
+        if _has_class_images(candidate):
+            return candidate
 
-        zipfile.ZipFile(zip_path).extractall(extract_dir / "data" / "images")
-        images_root = extract_dir / "data" / "images" / "dataset-resized"
-    if not images_root.exists():
-        raise FileNotFoundError("Could not find the TrashNet image folder after extraction.")
-    return images_root
+    # Nothing usable yet: unpack the resized archive (dataset-resized.zip).
+    zip_path = extract_dir / "data" / "dataset-resized.zip"
+    if not zip_path.exists():
+        raise FileNotFoundError(f"No images and no {zip_path.name} in {extract_dir}")
+    import zipfile
+
+    target = extract_dir / "data" / "images"
+    target.mkdir(parents=True, exist_ok=True)
+    print(f"[dataset] unpacking {zip_path.name} (42 MB, ~2,500 images)")
+    zipfile.ZipFile(zip_path).extractall(target)
+
+    for candidate in candidates:
+        if _has_class_images(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "Could not find a <class>/<image>.jpg layout under "
+        f"{extract_dir / 'data'}. Delete smart_bin/datasets and re-run."
+    )
+
+
+def _find_split_dir(images_root: Path) -> Path:
+    """Locate the folder that holds the official split lists.
+
+    The images can live at either of two depths depending on whether the zip had
+    to be unpacked (dataset-resized.zip) or was already expanded:
+
+        <repo>/data/images/<class>/*.jpg              -> lists are in data/
+        <repo>/data/images/dataset-resized/<class>/*  -> lists are in data/
+
+    The first version of this function assumed the first layout, so a fresh clone
+    crashed with "Missing official split file .../data/images/one-indexed-...".
+    """
+    for candidate in (images_root, images_root.parent, images_root.parent.parent):
+        if (candidate / SPLIT_FILES["train"]).exists():
+            return candidate
+    searched = " | ".join(str(c) for c in (images_root, images_root.parent, images_root.parent.parent))
+    raise FileNotFoundError(
+        f"Could not find {SPLIT_FILES['train']} next to the images. Searched: {searched}. "
+        "Re-download with `python dataset.py --force`."
+    )
 
 
 def build_trashnet_split(images_root: Path, split_root: Path = TRASHNET_DIR) -> Dict[str, Dict[str, int]]:
@@ -86,7 +140,7 @@ def build_trashnet_split(images_root: Path, split_root: Path = TRASHNET_DIR) -> 
     if not index:
         raise FileNotFoundError(f"No .jpg files under {images_root}")
 
-    source_data = images_root.parent
+    source_data = _find_split_dir(images_root)
     counts: Dict[str, Dict[str, int]] = {}
     for split, filename in SPLIT_FILES.items():
         listing = source_data / filename

@@ -17,6 +17,22 @@ was fabricated, and what has been fixed. The short version:
 
 ## Quick start
 
+On a fresh checkout — or in any sandbox that has been wiped — one command does
+everything (virtualenv, dataset, checkpoint if missing, verification):
+
+```bash
+python tools/bootstrap.py --serve        # … then open http://localhost:8000
+python tools/bootstrap.py --dry-run      # just say what is missing
+python tools/bootstrap.py --quick        # 30-epoch model if you are in a hurry
+```
+
+`bootstrap.py` is safe to re-run: every stage is skipped when it is already
+satisfied. The dataset (git-ignored), the virtualenv and the trained weights
+(`*.pt`, too large for plain git) do not survive a machine reset, so this is the
+supported way back.
+
+Or step by step:
+
 ```bash
 pip install -r requirements.txt
 
