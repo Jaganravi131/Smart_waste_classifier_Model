@@ -1,3 +1,10 @@
+"""Per-class threshold analysis.
+
+The thresholds below are a *study*, not a calibration: keep them in this file and
+copy the accepted values into one place (routing.py / predict.py) once measured -
+the previous version had a second hard-coded copy inside detect_smartbin.py, and
+the two drifted apart.
+"""
 from pathlib import Path
 import random
 from ultralytics import YOLO

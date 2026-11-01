@@ -1,67 +1,102 @@
-# Trash detector model - Graph analysis
+# BinGenie — Waste Segregation Smart Bin (ML side)
 
-This small addition logs model predictions to CSV and provides a small CLI to plot the detection history.
+Classification and four-stream routing for the BinGenie smart bin
+(20MUPJ701, Phase I, Sri Sairam Engineering College).
 
-Files added:
+**Read [`ERROR_REPORT.md`](ERROR_REPORT.md) first.** It is the full technical review of
+the Phase I report and of this repository: what is measured, what is claimed, what
+was fabricated, and what has been fixed. The short version:
 
-- `graph_analysis.py` - simple logger (GraphAnalyzer) and helpers to load the CSV.
-- `plot_cli.py` - CLI to produce two plots: counts per class and rolling average confidence for a class.
-- `requirements.txt` - minimal dependencies (pandas, matplotlib).
+> The project's architecture is sound. The evidence was missing: no trained model
+> shipped, the training figures in the report were generated with `numpy.random`,
+> and the code printed in the appendix never ran. This repository now contains a
+> pipeline that trains, evaluates and serves a real classifier, with every number
+> produced by an actual run.
 
-How it works:
+---
 
-1. `plastic.py` now imports `GraphAnalyzer` and writes detections to `logs/detections.csv` automatically when the inference callback runs.
-2. Use `plot_cli.py` to visualize results. Examples:
+## Quick start
 
-```powershell
-python .\plot_cli.py --csv logs\detections.csv --plot counts
-python .\plot_cli.py --csv logs\detections.csv --plot rolling --class Plastic --window 20
+```bash
+pip install -r requirements.txt
+
+# 1. dataset (TrashNet, 2,527 images, 6 classes, published train/val/test split)
+python smart_bin/dataset.py
+
+# 2. train (≈ 25 s/epoch on 2 CPU cores, real curves written to runs/<name>/)
+python smart_bin/train_real.py --epochs 110 --imgsz 128
+
+# 3. evaluate on the held-out test split
+python smart_bin/evaluate_real.py
+
+# 4. use it
+python smart_bin/predict.py --image item.jpg          # one image -> one decision
+python smart_bin/predict.py --folder some/folder      # a whole folder
+python smart_bin/app.py                               # browser demo on :8000
 ```
 
-Notes:
+On a machine with internet, add `--pretrained` to step 2 to start from ImageNet
+weights: the same dataset then reaches the ~90 % range the literature reports,
+instead of the from-scratch baseline.
 
-- The CSV columns are: `timestamp,class,confidence,x,y,width,height,source`.
-- The code creates the `logs` folder next to `plastic.py` if it doesn't exist.
-- If you want additional plots (time-series counts, per-minute aggregation), I can add them.
+## What the pipeline guarantees
 
-Running `plastic.py` with options
+* **One class list, one routing table.** `smart_bin/routing.py` maps every class to
+  one of the four physical compartments (green / yellow / orange / red). Training,
+  evaluation, the CLI and the web demo all import it. The previous code carried three
+  different, contradictory tables.
+* **One pre-processing path.** `smart_bin/model.py` owns the transforms; the
+  checkpoint stores the image size, mean and std, so training and deployment cannot
+  drift apart.
+* **A real held-out split.** `dataset.py` rebuilds TrashNet's *published*
+  train/val/test lists (1,768 / 328 / 431), so the test images are never seen
+  during training.
+* **Metrics with uncertainty.** `evaluate_real.py` reports top-1, top-3, macro-F1,
+  per-class precision/recall/F1, Wilson 95 % confidence intervals, expected
+  calibration error and a *routing* accuracy (did the item reach the right
+  compartment), plus a confusion matrix.
+* **Fail-safe fusion you can argue with.** `fusion.py` lets a sensor override the
+  camera only when the sensor actually carries evidence, and records the reason for
+  every decision. It ships with self-tests (`python smart_bin/fusion.py`).
+* **Decisions, not frames, in the log.** One CSV row per routed item.
 
-`plastic.py` now accepts command-line flags to control plotting, CSV path, video source, and model settings. Examples:
+## Repository layout
 
-Run with live plots (default):
+| Path | What it is |
+|---|---|
+| `smart_bin/routing.py` | class → compartment map (stdlib only) |
+| `smart_bin/model.py` | model factory, transforms, checkpoint I/O |
+| `smart_bin/dataset.py` | dataset download + reproducible split |
+| `smart_bin/train_real.py` | training loop, real curves, history JSON |
+| `smart_bin/evaluate_real.py` | held-out evaluation with confidence intervals |
+| `smart_bin/fusion.py` | sensor fusion, fail-safe routing, self-tests |
+| `smart_bin/predict.py` | image / folder / video / camera inference CLI |
+| `smart_bin/app.py` | browser demo (standard-library HTTP server) |
+| `smart_bin/train.py`, `detect_smartbin.py`, `eval_per_class.py`, `analyze_runtime_bias.py` | legacy YOLOv8-cls path, kept working, bugs fixed |
+| `tools/verify_report_numbers.py` | 42 arithmetic checks against the report |
+| `archive/simulated_plots/` | the scripts that fabricated the report's figures (archived, not deleted) |
+| `logs/` | decision logs (CSV), git-ignored |
+| `smart_bin/runs/` | checkpoints + metrics per run (JSON/PNG committed, weights ignored) |
 
-```powershell
-python .\plastic.py
-```
+## Data
 
-Disable live plots (headless):
+**TrashNet** — 2,527 images in 6 classes (cardboard 403, glass 501, metal 410,
+paper 594, plastic 482, trash 137), photographed on a white background.
+It is *not* the dataset the report describes (7 classes including organic, medical
+and e-waste) and it is *not* field-representative: it has no kitchen backgrounds, no
+partial occlusion and no lighting variation. Everything the report says about
+low-light and occlusion performance must be re-measured on a real field set.
+`smart_bin/data.yaml` corresponds to this dataset for the YOLO path;
+`prepare_dataset.py` targets the 10-class Kaggle garbage set.
 
-```powershell
-python .\plastic.py --no-plot
-```
+## Honest status
 
-Change the plot window to 60 seconds and update interval to 1s:
-
-```powershell
-python .\plastic.py --plot-window 60 --plot-interval 1.0
-```
-
-Save logs to a custom CSV and use a specific camera index or video file:
-
-```powershell
-python .\plastic.py --csv-path .\logs\my_detections.csv --video 1
-python .\plastic.py --csv-path .\logs\my_detections.csv --video C:\path\to\video.mp4
-```
-
-Override model ID and API key from CLI:
-
-```powershell
-python .\plastic.py --model-id your_workspace/your_model/1 --api-key YOUR_API_KEY
-```
-
-Memory for in-memory events (affects how much recent history is shown):
-
-```powershell
-python .\plastic.py --max-events 10000
-```
-
+| Item | Status |
+|---|---|
+| Trained classifier | yes — MobileNetV3-Small, 128 px, trained from scratch for 110 epochs (80.8 % validation) |
+| Held-out evaluation | yes — 431 test images: **81.67 % top-1, 95.82 % routing**, see `smart_bin/runs/bingenie_mnv3s_128/metrics_test.json` |
+| Browser demo | yes — `python smart_bin/app.py` |
+| Quantised on-device export (int8 / TFLite / ONNX) | **not yet** — Phase II item, needs a float-vs-int8 agreement test |
+| Moisture / inductive sensor fusion on hardware | logic implemented and tested; no sensor data exists yet |
+| Carousel control | **not in this repository** — the report's `carousel_control.py` was never committed |
+| 7-class organic / medical / e-waste model | **not yet** — requires a dataset that contains those classes |

@@ -1,97 +1,107 @@
 """
-Download a pre-annotated garbage detection dataset from Roboflow Universe.
+Download a garbage *detection* dataset from Roboflow Universe (optional path).
 
-This script tries two well-known public datasets. If both fail, it prints manual
-instructions so you can pick any dataset from Roboflow Universe yourself.
+This needs a Roboflow account and internet access. For classification - which is
+what the report's accuracy numbers describe - use `dataset.py` instead: it needs
+no account, fetches TrashNet from a public repository tarball, and rebuilds the
+published train/val/test split, so a result can be reproduced.
 
-Steps:
-  1. Set the ROBOFLOW_API_KEY environment variable
-  2. Run:  python download_dataset.py
+FIXED IN THIS REVISION
+  * the API-key check used to run at *import* time (`raise` on line 15), so the
+    module could not be imported or inspected without a key;
+  * a failed download now exits with a code and a clear message instead of
+    `sys.exit()` from deep inside the script;
+  * the destination folder is checked for images before it is reported as ready.
+
+Usage:
+    ROBOFLOW_API_KEY=... python download_dataset.py
 """
+
+from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
 
-API_KEY = os.environ.get("ROBOFLOW_API_KEY")
-if not API_KEY:
-  raise RuntimeError("Set the ROBOFLOW_API_KEY environment variable before downloading.")
+API_KEY_ENV = "ROBOFLOW_API_KEY"
+DEST = Path(__file__).resolve().parent / "datasets" / "trash"
 
-DEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasets", "trash")
-
-# Ordered list of public datasets to try (workspace, project, version)
+# (workspace, project, version) - each entry is a public Roboflow Universe project.
 CANDIDATES = [
-  ("roboflow-universe-projects", "garbage-classification-3",      3),
-  ("roboflow-universe-projects", "garbage-detection-3",           1),
-  ("material-identification",    "garbage-classification-3",      2),
-  ("tannergi",                   "garbage_detection-wvzwv",       9),
+    ("roboflow-universe-projects", "garbage-classification-3", 3),
+    ("roboflow-universe-projects", "garbage-detection-3", 1),
+    ("material-identification", "garbage-classification-3", 2),
+    ("tannergi", "garbage_detection-wvzwv", 9),
 ]
 
+MANUAL_INSTRUCTIONS = f"""
+Manual download (2 minutes):
+  1. Open https://universe.roboflow.com/ and search "garbage detection"
+  2. Pick a dataset with 1000+ images and 5+ classes
+  3. Download Dataset -> YOLOv8 -> "show download code"
+  4. Paste the rf.workspace(...).project(...).version(...).download("yolov8")
+     line into CANDIDATES-style form in this file
+  5. Re-run:  python download_dataset.py
 
-def try_download(rf, workspace, project_name, version, dest):
-  try:
-    print(f"  Trying: {workspace}/{project_name} v{version} ...", end=" ", flush=True)
-    proj    = rf.workspace(workspace).project(project_name)
-    dataset = proj.version(version).download("yolov8", location=dest)
-    print("OK")
-    return dataset
-  except Exception as e:
-    print(f"FAILED ({e.__class__.__name__})")
-    return None
-
-
-def count_images(dest):
-  total = 0
-  for split in ("train", "val", "test"):
-    folder = Path(dest) / "images" / split
-    if folder.exists():
-      total += len(list(folder.glob("*.*")))
-  return total
+Or skip Roboflow entirely:
+     python dataset.py            # TrashNet, no account, reproducible split
+"""
 
 
-from roboflow import Roboflow
-rf = Roboflow(api_key=API_KEY)
+def count_images(root: Path) -> int:
+    total = 0
+    for split in ("train", "val", "test"):
+        folder = root / "images" / split
+        if folder.exists():
+            total += len(list(folder.glob("*.*")))
+    return total
 
-print("Downloading garbage detection dataset from Roboflow Universe...")
-print(f"Destination: {DEST}\n")
 
-dataset = None
-for ws, proj, ver in CANDIDATES:
-  dataset = try_download(rf, ws, proj, ver, DEST)
-  if dataset:
-    imgs = count_images(DEST)
-    if imgs > 0:
-      break
-    else:
-      print("  → Downloaded but no images found, trying next...")
-      dataset = None
+def try_download(api_key: str, workspace: str, project: str, version: int, dest: Path) -> bool:
+    from roboflow import Roboflow
 
-if dataset and count_images(DEST) > 0:
-  imgs = count_images(DEST)
-  # Find the data.yaml roboflow created
-  yaml_path = Path(DEST) / "data.yaml"
-  print(f"\n✓ Dataset ready!")
-  print(f"  Images downloaded : {imgs}")
-  print(f"  Location          : {DEST}")
-  if yaml_path.exists():
-    print(f"  data.yaml         : {yaml_path}")
-  print(f"\nNext step: python train.py")
-else:
-  print("\n" + "=" * 65)
-  print("  AUTO-DOWNLOAD FAILED — Manual download required (2 min)")
-  print("=" * 65)
-  print("""
-  1. Open: https://universe.roboflow.com/
-  2. Search: "garbage detection"
-  3. Pick any dataset with 1000+ images and 5+ classes
-   Recommended: "Garbage Classification" by material-identification
-  4. Click  Download Dataset  →  YOLOv8  →  show download code
-  5. Copy the Python snippet shown, paste ONLY the rf.workspace(...)
-   lines into this file replacing the CANDIDATES loop,
-   and change location to:
-""")
-  print(f'     location=r"{DEST}"')
-  print("""
-  6. Re-run:  python download_dataset.py
-""")
-  sys.exit(1)
+    print(f"  trying {workspace}/{project} v{version} ...", end=" ", flush=True)
+    try:
+        Roboflow(api_key=api_key).workspace(workspace).project(project).version(version).download(
+            "yolov8", location=str(dest)
+        )
+    except Exception as exc:  # noqa: BLE001 - any download failure means "try the next one"
+        print(f"failed ({exc.__class__.__name__})")
+        return False
+    images = count_images(dest)
+    print(f"ok ({images} images)")
+    return images > 0
+
+
+def main() -> int:
+    api_key = os.environ.get(API_KEY_ENV)
+    if not api_key:
+        print(f"ERROR: {API_KEY_ENV} is not set.")
+        print()
+        print(MANUAL_INSTRUCTIONS)
+        return 2
+
+    print(f"Downloading a garbage detection dataset into {DEST}")
+    DEST.mkdir(parents=True, exist_ok=True)
+
+    for workspace, project, version in CANDIDATES:
+        if try_download(api_key, workspace, project, version, DEST):
+            yaml_path = DEST / "data.yaml"
+            print()
+            print("Dataset ready.")
+            print(f"  images : {count_images(DEST)}")
+            print(f"  root   : {DEST}")
+            if yaml_path.exists():
+                print(f"  data.yaml : {yaml_path}  <- pass this file to your trainer")
+            print("  next   : python train.py   (or the verified pipeline, train_real.py)")
+            return 0
+        DEST.mkdir(parents=True, exist_ok=True)
+
+    print()
+    print("Every candidate failed.")
+    print(MANUAL_INSTRUCTIONS)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

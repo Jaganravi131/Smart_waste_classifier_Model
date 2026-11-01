@@ -1,7 +1,14 @@
 """
 Smart Bin Trash Classifier — YOLOv8 Classification Training
 
-Uses the 10-class garbage dataset (12,259 images) prepared by prepare_dataset.py
+Uses the class folders prepared by prepare_dataset.py (10 classes by default).
+Note that smart_bin/data.yaml declares only 6 classes - data.yaml is for the
+*detection* dataset and is not read by this script; the class list here comes from
+the folder names.
+
+Prefer the verified pipeline (dataset.py / train_real.py / evaluate_real.py) for
+anything that will be quoted in the report: it reproduces a published split and
+records every metric.
 
 Run:
   python train.py                          # default YOLOv8s, 50 epochs
@@ -60,8 +67,10 @@ def main():
         print("    python prepare_dataset.py")
         return
 
-    # YOLOv8 classification models use -cls suffix
-    model = YOLO(f"{args.model}-cls.pt")
+    # YOLOv8 classification models use a -cls suffix. Accept either spelling
+    # ("yolov8s" or "yolov8s-cls") instead of building "yolov8s-cls-cls.pt".
+    weights = args.model if args.model.endswith("-cls") else f"{args.model}-cls"
+    model = YOLO(f"{weights}.pt")
 
     results = model.train(
         data=str(DATASET_DIR),   # folder with train/ and val/ subdirs
@@ -73,7 +82,7 @@ def main():
         augment=True,
         cache=False,             # set True if you have >=16GB RAM
         project=str(BASE_DIR / "runs"),
-        exist_ok=True,
+        exist_ok=False,   # never silently overwrite an earlier run
     )
 
     best_weights = BASE_DIR / "runs" / args.name / "weights" / "best.pt"

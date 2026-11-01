@@ -4,13 +4,27 @@ __pycache__/
 
 # Local datasets and generated training artifacts
 smart_bin/datasets/
-smart_bin/runs/
+smart_bin/runs/**
+# ...but the evidence of a run must be publishable: the report cites metrics,
+# curves and a confusion matrix, and those cannot live only on one laptop.
+!smart_bin/runs/
+!smart_bin/runs/**/
+!smart_bin/runs/**/summary.json
+!smart_bin/runs/**/history.json
+!smart_bin/runs/**/metrics_*.json
+!smart_bin/runs/**/training_curves.png
+!smart_bin/runs/**/confusion_matrix_*.png
+
+# Model weights: too large for a plain git repo. Publish them as a GitHub
+# release asset or with Git LFS, and record the download link in MODEL_CARD.md.
 *.pt
 *.onnx
+*.tflite
 
 # Runtime logs and generated plots
 logs/*.csv
 *.png
+!smart_bin/runs/**/*.png
 
 # Local secrets and environment files
 .env
