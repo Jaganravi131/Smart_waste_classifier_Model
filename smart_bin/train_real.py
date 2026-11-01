@@ -239,7 +239,11 @@ def main() -> int:
 
     describe("BinGenie - real classifier training")
     print(f"  run          : {run_name}")
-    print(f"  model        : {args.model} ({'ImageNet init' if args.pretrained else 'from scratch'})")
+    model = build_model(args.model, len(labels), pretrained=args.pretrained).to(device)
+    init_desc = "ImageNet init" if model.init_source == "imagenet" else "from scratch"
+    if args.pretrained and model.init_source != "imagenet":
+        init_desc = "from scratch (ImageNet weights were requested but unreachable)"
+    print(f"  model        : {args.model} ({init_desc})")
     print(f"  image size   : {args.imgsz}px   batch {args.batch}   epochs {args.epochs}")
     print(f"  classes      : {labels}")
     print(f"  device       : {device} (threads={torch.get_num_threads()})")
@@ -253,7 +257,6 @@ def main() -> int:
     print(f"  val images   : {len(val_loader.dataset)}")
     print()
 
-    model = build_model(args.model, len(labels), pretrained=args.pretrained).to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     ema = ModelEma(model, args.ema_decay) if args.ema else None
     print(f"  regularisers : mixup {args.mixup or 'off'}  ema {'on' if ema else 'off'}  "
@@ -353,7 +356,8 @@ def main() -> int:
     summary = {
         "run": run_name,
         "model": args.model,
-        "pretrained_init": bool(args.pretrained),
+        "pretrained_requested": bool(args.pretrained),
+        "pretrained_init": model.init_source == "imagenet",
         "mixup_alpha": args.mixup,
         "ema": bool(args.ema),
         "balanced_sampling": bool(args.balanced),

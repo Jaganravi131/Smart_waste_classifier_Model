@@ -22,6 +22,7 @@ import argparse
 import json
 import math
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -70,12 +71,15 @@ def score_checkpoint(run: Path, root: Path, split: str, threshold: float, tta: b
     loader = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=0)
 
     probabilities, targets = [], []
+    latency_ms = []
     with torch.no_grad():
         for images, batch_targets in loader:
+            started = time.perf_counter()
             logits = model(images)
             probs = torch.softmax(logits, 1)
             if tta:
                 probs = 0.5 * (probs + torch.softmax(model(torch.flip(images, dims=[3])), 1))
+            latency_ms.append((time.perf_counter() - started) * 1000 / max(len(images), 1))
             probabilities.append(probs.numpy())
             targets.append(batch_targets.numpy())
 
@@ -90,10 +94,23 @@ def score_checkpoint(run: Path, root: Path, split: str, threshold: float, tta: b
         routed_correct[index] = decision.stream == stream_for(labels[target])["stream"]
 
     per_class = {}
+    f1_scores = []
     for index, name in enumerate(labels):
         support = int((targets == index).sum())
         hits = int(((predictions == index) & (targets == index)).sum())
-        per_class[name] = {"recall": hits / support if support else 0.0, "support": support}
+        predicted = int((predictions == index).sum())
+        recall = hits / support if support else 0.0
+        precision = hits / predicted if predicted else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+        f1_scores.append(f1)
+        per_class[name] = {"recall": recall, "precision": precision, "f1": f1, "support": support}
+
+    # parameters and the training budget come from the artefacts, not from a guess
+    params = int(sum(p.numel() for p in model.parameters()))
+    epochs = None
+    summary_path = run / "summary.json"
+    if summary_path.exists():
+        epochs = json.loads(summary_path.read_text()).get("epochs")
 
     return {
         "run": run.name,
@@ -103,24 +120,96 @@ def score_checkpoint(run: Path, root: Path, split: str, threshold: float, tta: b
         "top1_ci": wilson(int(correct.sum()), len(targets)),
         "routing": float(routed_correct.mean()),
         "routing_ci": wilson(int(routed_correct.sum()), len(targets)),
+        "macro_f1": float(np.mean(f1_scores)),
+        "params": params,
+        "params_m": round(params / 1e6, 2),
+        "epochs": epochs,
+        "latency_ms": round(float(np.mean(latency_ms)), 2),
         "per_class": per_class,
         "correct": correct,
         "routed_correct": routed_correct,
     }
 
 
+def print_table(results: list[dict], split: str, threshold: float, tta: bool,
+                markdown: bool) -> None:
+    """One table for N runs - the architecture sweep, not a pairwise test."""
+    width = max(len(r["run"]) for r in results) + 2
+    rule = "=" * (width + 74)
+
+    if markdown:
+        print(f"| run | top-1 (95 % CI) | routing (95 % CI) | macro-F1 | params | ms/img | epochs |")
+        print("|---|---|---|---|---|---|---|")
+        for r in results:
+            print(f"| `{r['run']}` | {r['top1'] * 100:.2f} % "
+                  f"({r['top1_ci'][0] * 100:.1f}-{r['top1_ci'][1] * 100:.1f}) | "
+                  f"{r['routing'] * 100:.2f} % "
+                  f"({r['routing_ci'][0] * 100:.1f}-{r['routing_ci'][1] * 100:.1f}) | "
+                  f"{r['macro_f1'] * 100:.2f} % | {r['params_m']:.2f} M | "
+                  f"{r['latency_ms']:.1f} | {r['epochs'] or '-'} |")
+        return
+
+    print(rule)
+    print(f"split {split} ({results[0]['images']} images)   threshold {threshold}"
+          f"{'   TTA on' if tta else ''}")
+    print(rule)
+    print(f"  {'run':<{width}}{'top-1 (95 % CI)':>20}{'routing (95 % CI)':>21}"
+          f"{'macro-F1':>10}{'params':>10}{'ms/img':>8}{'epochs':>7}")
+    for r in results:
+        print(f"  {r['run']:<{width}}"
+              f"{r['top1'] * 100:>7.2f} % ({r['top1_ci'][0] * 100:.1f}-{r['top1_ci'][1] * 100:.1f})"
+              f"{r['routing'] * 100:>7.2f} % ({r['routing_ci'][0] * 100:.1f}-{r['routing_ci'][1] * 100:.1f})"
+              f"{r['macro_f1'] * 100:>9.2f} %"
+              f"{r['params_m']:>9.2f} M"
+              f"{r['latency_ms']:>8.1f}"
+              f"{str(r['epochs'] or '-'):>7}")
+
+    classes = list(results[0]["per_class"])
+    print(f"\n  recall per class")
+    print(f"  {'run':<{width}}" + "".join(f"{c[:8]:>10}" for c in classes))
+    for r in results:
+        print(f"  {r['run']:<{width}}"
+              + "".join(f"{r['per_class'][c]['recall'] * 100:>9.1f}%" for c in classes))
+
+    print("\n  overlapping CIs mean the difference is not resolved by 431 images;"
+          "\n  run the pairwise mode for the McNemar test.")
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Compare two runs on the same split")
+    parser = argparse.ArgumentParser(description="Compare runs on the same split")
     parser.add_argument("--baseline", default="bingenie_mnv3s_128", help="run folder name under smart_bin/runs")
-    parser.add_argument("--candidate", required=True, help="run folder name under smart_bin/runs")
+    parser.add_argument("--candidate", default=None, help="run folder name under smart_bin/runs")
+    parser.add_argument("--runs", nargs="+", default=None,
+                        help="table mode: score these runs side by side, no pairwise test")
     parser.add_argument("--split", default="test", choices=("val", "test"))
     parser.add_argument("--threshold", type=float, default=0.40)
     parser.add_argument("--data", type=Path, default=TRASHNET_DIR)
     parser.add_argument("--tta", action="store_true", help="average original + horizontal flip")
     parser.add_argument("--json", type=Path, default=None, help="write the comparison as JSON")
+    parser.add_argument("--markdown", action="store_true", help="emit a markdown table (with --runs)")
     args = parser.parse_args()
 
     runs = REPO / "smart_bin" / "runs"
+
+    if args.runs:
+        results = [score_checkpoint(runs / name, args.data, args.split, args.threshold, args.tta)
+                   for name in args.runs]
+        print_table(results, args.split, args.threshold, args.tta, args.markdown)
+        if args.json:
+            payload = {
+                "split": args.split,
+                "threshold": args.threshold,
+                "tta": args.tta,
+                "runs": [{k: v for k, v in r.items() if k not in ("correct", "routed_correct")}
+                         for r in results],
+            }
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(json.dumps(payload, indent=2) + "\n")
+            print(f"\n  written: {args.json}")
+        return 0
+
+    if not args.candidate:
+        parser.error("give --candidate (pairwise mode) or --runs (table mode)")
     baseline = score_checkpoint(runs / args.baseline, args.data, args.split, args.threshold, args.tta)
     candidate = score_checkpoint(runs / args.candidate, args.data, args.split, args.threshold, args.tta)
 

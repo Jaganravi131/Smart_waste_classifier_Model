@@ -67,12 +67,17 @@ def build_model(name: str, num_classes: int, pretrained: bool = False) -> nn.Mod
         raise ValueError(f"Unknown model '{name}'. Choose from {SUPPORTED_MODELS}")
 
     weights = "DEFAULT" if pretrained else None
+    loaded = False
     try:
         net = getattr(models, name)(weights=weights)
+        loaded = bool(pretrained)
     except Exception as exc:  # pragma: no cover - depends on network
         print(f"[model] WARNING: could not load ImageNet weights ({exc.__class__.__name__}).")
         print("[model] WARNING: falling back to training from scratch.")
         net = getattr(models, name)(weights=None)
+    # Callers record this, not their own request: a run that *asked* for ImageNet
+    # weights and silently fell back must not be logged as a pretrained run.
+    net.init_source = "imagenet" if loaded else "scratch"
 
     # Replace the classifier head of each family with a fresh one.
     if name.startswith("mobilenet_v3"):
