@@ -70,6 +70,15 @@ def routing_at(probs: np.ndarray, targets: np.ndarray, labels, threshold: float)
     return routed / total, refused / total
 
 
+def routing_baseline(targets: np.ndarray, labels) -> float:
+    """Share of the split covered by the majority stream - the do-nothing score."""
+    counts: dict[str, int] = {}
+    for target in targets:
+        name = str(stream_for(str(labels[int(target)]))["stream"])
+        counts[name] = counts.get(name, 0) + 1
+    return max(counts.values()) / len(targets)
+
+
 def macro_f1(probs: np.ndarray, targets: np.ndarray, n_classes: int) -> float:
     predictions = probs.argmax(1)
     scores = []
@@ -141,6 +150,7 @@ def run_one(name: str, root: Path, tta: bool, val_probs_cache: dict) -> dict:
         test_residual_rate=round(test_refused, 4),
         test_latency_ms=round(latency, 2),
         test_routing_at_040=round(routing_at(test_probs, test_targets, labels, 0.40)[0], 4),
+        routing_baseline=round(routing_baseline(test_targets, labels), 4),
         val_sweep=grid,
     )
 
@@ -192,6 +202,8 @@ def main() -> int:
                   f"{r['test_latency_ms']:>8.1f}")
         print("\n  routing is reported at each model's own validation-tuned threshold, and again"
               "\n  at the shipped 0.40 so the cost of not re-tuning is visible.")
+        print(f"  trivial routing baseline (always pick the majority stream): "
+              f"{results[0]['routing_baseline'] * 100:.2f} %")
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

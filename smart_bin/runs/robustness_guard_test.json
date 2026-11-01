@@ -1,0 +1,361 @@
+{
+  "run": "bingenie_mnv3s_128",
+  "precision": "int8",
+  "split": "test",
+  "threshold": 0.4,
+  "conditions": [
+    {
+      "condition": "clean",
+      "description": "as captured",
+      "top1": 0.7865,
+      "top1_ci": [
+        0.7454,
+        0.8226
+      ],
+      "routing": 0.949,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.8215,
+      "latency_ms": 27.35,
+      "seconds": 12.7,
+      "coverage": 0.9768,
+      "selective_top1": 0.7933,
+      "wrong_but_accepted": 0.2019
+    },
+    {
+      "condition": "dark",
+      "description": "brightness \u00d70.50 (dim room, LEDs only)",
+      "top1": 0.7007,
+      "top1_ci": [
+        0.6558,
+        0.742
+      ],
+      "routing": 0.935,
+      "refused_rate": 0.5012,
+      "mean_confidence": 0.7755,
+      "latency_ms": 30.26,
+      "seconds": 14.4,
+      "coverage": 0.4988,
+      "selective_top1": 0.693,
+      "wrong_but_accepted": 0.1531,
+      "vs_clean_pp": -8.58,
+      "mcnemar_only_clean": 61,
+      "mcnemar_only_condition": 24,
+      "p_value": 0.0001
+    },
+    {
+      "condition": "very_dark",
+      "description": "brightness \u00d70.30",
+      "top1": 0.3318,
+      "top1_ci": [
+        0.289,
+        0.3776
+      ],
+      "routing": 0.8747,
+      "refused_rate": 1.0,
+      "mean_confidence": 0.6961,
+      "latency_ms": 24.8,
+      "seconds": 11.8,
+      "coverage": 0.0,
+      "selective_top1": null,
+      "wrong_but_accepted": 0.0,
+      "vs_clean_pp": -45.47,
+      "mcnemar_only_clean": 217,
+      "mcnemar_only_condition": 21,
+      "p_value": 0.0
+    },
+    {
+      "condition": "bright",
+      "description": "brightness \u00d71.60 (specular highlights)",
+      "top1": 0.6682,
+      "top1_ci": [
+        0.6224,
+        0.711
+      ],
+      "routing": 0.9188,
+      "refused_rate": 0.1044,
+      "mean_confidence": 0.7655,
+      "latency_ms": 24.25,
+      "seconds": 11.6,
+      "coverage": 0.8956,
+      "selective_top1": 0.6813,
+      "wrong_but_accepted": 0.2854,
+      "vs_clean_pp": -11.83,
+      "mcnemar_only_clean": 75,
+      "mcnemar_only_condition": 24,
+      "p_value": 0.0
+    },
+    {
+      "condition": "low_contrast",
+      "description": "contrast \u00d70.60",
+      "top1": 0.7216,
+      "top1_ci": [
+        0.6774,
+        0.7618
+      ],
+      "routing": 0.9374,
+      "refused_rate": 0.1624,
+      "mean_confidence": 0.7901,
+      "latency_ms": 25.0,
+      "seconds": 12.1,
+      "coverage": 0.8376,
+      "selective_top1": 0.7202,
+      "wrong_but_accepted": 0.2343,
+      "vs_clean_pp": -6.49,
+      "mcnemar_only_clean": 46,
+      "mcnemar_only_condition": 18,
+      "p_value": 0.0006
+    },
+    {
+      "condition": "blur1",
+      "description": "gaussian blur, radius 1",
+      "top1": 0.7749,
+      "top1_ci": [
+        0.7332,
+        0.8118
+      ],
+      "routing": 0.9443,
+      "refused_rate": 0.0325,
+      "mean_confidence": 0.8192,
+      "latency_ms": 24.89,
+      "seconds": 13.8,
+      "coverage": 0.9675,
+      "selective_top1": 0.7866,
+      "wrong_but_accepted": 0.2065,
+      "vs_clean_pp": -1.16,
+      "mcnemar_only_clean": 7,
+      "mcnemar_only_condition": 2,
+      "p_value": 0.1797
+    },
+    {
+      "condition": "blur2",
+      "description": "gaussian blur, radius 2 (out of focus)",
+      "top1": 0.7425,
+      "top1_ci": [
+        0.6992,
+        0.7815
+      ],
+      "routing": 0.9374,
+      "refused_rate": 0.0812,
+      "mean_confidence": 0.8092,
+      "latency_ms": 26.6,
+      "seconds": 14.7,
+      "coverage": 0.9188,
+      "selective_top1": 0.7626,
+      "wrong_but_accepted": 0.2181,
+      "vs_clean_pp": -4.4,
+      "mcnemar_only_clean": 24,
+      "mcnemar_only_condition": 5,
+      "p_value": 0.0005
+    },
+    {
+      "condition": "noise",
+      "description": "sensor noise \u03c3 = 0.03",
+      "top1": 0.761,
+      "top1_ci": [
+        0.7186,
+        0.7989
+      ],
+      "routing": 0.9374,
+      "refused_rate": 0.0302,
+      "mean_confidence": 0.8108,
+      "latency_ms": 28.48,
+      "seconds": 18.1,
+      "coverage": 0.9698,
+      "selective_top1": 0.7727,
+      "wrong_but_accepted": 0.2204,
+      "vs_clean_pp": -2.55,
+      "mcnemar_only_clean": 19,
+      "mcnemar_only_condition": 8,
+      "p_value": 0.0522
+    },
+    {
+      "condition": "heavy_noise",
+      "description": "sensor noise \u03c3 = 0.08",
+      "top1": 0.6032,
+      "top1_ci": [
+        0.5563,
+        0.6483
+      ],
+      "routing": 0.891,
+      "refused_rate": 0.0371,
+      "mean_confidence": 0.7913,
+      "latency_ms": 26.31,
+      "seconds": 17.3,
+      "coverage": 0.9629,
+      "selective_top1": 0.6145,
+      "wrong_but_accepted": 0.3712,
+      "vs_clean_pp": -18.33,
+      "mcnemar_only_clean": 96,
+      "mcnemar_only_condition": 17,
+      "p_value": 0.0
+    },
+    {
+      "condition": "jpeg_q30",
+      "description": "JPEG quality 30",
+      "top1": 0.7819,
+      "top1_ci": [
+        0.7405,
+        0.8183
+      ],
+      "routing": 0.9466,
+      "refused_rate": 0.0302,
+      "mean_confidence": 0.8196,
+      "latency_ms": 25.37,
+      "seconds": 12.4,
+      "coverage": 0.9698,
+      "selective_top1": 0.7919,
+      "wrong_but_accepted": 0.2019,
+      "vs_clean_pp": -0.46,
+      "mcnemar_only_clean": 8,
+      "mcnemar_only_condition": 6,
+      "p_value": 0.7905
+    },
+    {
+      "condition": "jpeg_q10",
+      "description": "JPEG quality 10",
+      "top1": 0.7494,
+      "top1_ci": [
+        0.7064,
+        0.788
+      ],
+      "routing": 0.9234,
+      "refused_rate": 0.0441,
+      "mean_confidence": 0.8165,
+      "latency_ms": 25.31,
+      "seconds": 12.3,
+      "coverage": 0.9559,
+      "selective_top1": 0.7694,
+      "wrong_but_accepted": 0.2204,
+      "vs_clean_pp": -3.71,
+      "mcnemar_only_clean": 31,
+      "mcnemar_only_condition": 15,
+      "p_value": 0.0259
+    },
+    {
+      "condition": "rot10",
+      "description": "rotated 10\u00b0",
+      "top1": 0.8074,
+      "top1_ci": [
+        0.7675,
+        0.8419
+      ],
+      "routing": 0.9466,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.8144,
+      "latency_ms": 25.63,
+      "seconds": 12.5,
+      "coverage": 0.9768,
+      "selective_top1": 0.8171,
+      "wrong_but_accepted": 0.1787,
+      "vs_clean_pp": 2.09,
+      "mcnemar_only_clean": 14,
+      "mcnemar_only_condition": 23,
+      "p_value": 0.1877
+    },
+    {
+      "condition": "rot20",
+      "description": "rotated 20\u00b0 (item sliding)",
+      "top1": 0.768,
+      "top1_ci": [
+        0.7259,
+        0.8054
+      ],
+      "routing": 0.9258,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.8055,
+      "latency_ms": 26.65,
+      "seconds": 13.1,
+      "coverage": 0.9768,
+      "selective_top1": 0.7815,
+      "wrong_but_accepted": 0.2135,
+      "vs_clean_pp": -1.85,
+      "mcnemar_only_clean": 24,
+      "mcnemar_only_condition": 16,
+      "p_value": 0.2682
+    },
+    {
+      "condition": "occl10",
+      "description": "10 % occluded (hand at the edge)",
+      "top1": 0.7401,
+      "top1_ci": [
+        0.6967,
+        0.7793
+      ],
+      "routing": 0.9304,
+      "refused_rate": 0.0278,
+      "mean_confidence": 0.7878,
+      "latency_ms": 24.65,
+      "seconds": 11.5,
+      "coverage": 0.9722,
+      "selective_top1": 0.7494,
+      "wrong_but_accepted": 0.2436,
+      "vs_clean_pp": -4.64,
+      "mcnemar_only_clean": 40,
+      "mcnemar_only_condition": 20,
+      "p_value": 0.0135
+    },
+    {
+      "condition": "occl25",
+      "description": "25 % occluded",
+      "top1": 0.5963,
+      "top1_ci": [
+        0.5493,
+        0.6416
+      ],
+      "routing": 0.9118,
+      "refused_rate": 0.0441,
+      "mean_confidence": 0.7504,
+      "latency_ms": 26.68,
+      "seconds": 12.4,
+      "coverage": 0.9559,
+      "selective_top1": 0.6092,
+      "wrong_but_accepted": 0.3735,
+      "vs_clean_pp": -19.02,
+      "mcnemar_only_clean": 108,
+      "mcnemar_only_condition": 26,
+      "p_value": 0.0
+    },
+    {
+      "condition": "small_item",
+      "description": "item at half resolution (far / small)",
+      "top1": 0.7912,
+      "top1_ci": [
+        0.7503,
+        0.8269
+      ],
+      "routing": 0.9466,
+      "refused_rate": 0.0209,
+      "mean_confidence": 0.8205,
+      "latency_ms": 24.08,
+      "seconds": 13.0,
+      "coverage": 0.9791,
+      "selective_top1": 0.7915,
+      "wrong_but_accepted": 0.2042,
+      "vs_clean_pp": 0.47,
+      "mcnemar_only_clean": 0,
+      "mcnemar_only_condition": 2,
+      "p_value": 0.5
+    },
+    {
+      "condition": "worst_realistic",
+      "description": "dim + blur + JPEG + tilt together",
+      "top1": 0.7633,
+      "top1_ci": [
+        0.721,
+        0.801
+      ],
+      "routing": 0.942,
+      "refused_rate": 0.0278,
+      "mean_confidence": 0.7949,
+      "latency_ms": 28.05,
+      "seconds": 16.5,
+      "coverage": 0.9722,
+      "selective_top1": 0.7661,
+      "wrong_but_accepted": 0.2274,
+      "vs_clean_pp": -2.32,
+      "mcnemar_only_clean": 33,
+      "mcnemar_only_condition": 23,
+      "p_value": 0.2288
+    }
+  ]
+}

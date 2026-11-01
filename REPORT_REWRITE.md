@@ -195,6 +195,16 @@ build exists and has been verified.
 `⟨DELETE⟩` "precision exceeds recall for every class" — in the measured run it does
 not (cardboard and paper have recall above precision).
 
+> **Routing accuracy needs its baseline.** Five of the six TrashNet classes map to
+> the same compartment, so a predictor that answers "recyclable" for every item
+> already scores **93.27 %** on this test split. The measured **94.90 %** is 1.63
+> percentage points above that degenerate classifier. The compartment number is a
+> product-level convenience, not evidence of classification skill: quote the
+> per-class table, and state the baseline whenever the routing figure appears. On a
+> taxonomy with several compartments in play - the 10-class set that
+> `prepare_dataset.py` builds, with biodegradable, electronic and residual all
+> populated - the same metric becomes discriminative and will be *lower*.
+
 ### 6.3 Architecture selection — replacement
 
 > Three backbones were trained under an identical protocol — the same split, the
@@ -247,18 +257,85 @@ selection to report beyond the deployment cost.
 > nats. The measured curves are in Fig. 6.2, generated from the logged per-epoch
 > history.
 
-### 6.5 Performance under different operating conditions — replacement protocol
+### 6.5 Performance under different operating conditions — replacement
 
-> **⟨MEASURE⟩** — this table must be produced by a new capture campaign, because no
-> field images exist in the repository and the previous version of this section
-> reported numbers for which no image set, script or log existed.
+> **Synthetic degradation, measured.** Field images do not exist in this
+> repository, so instead of quoting a capture campaign that was never run, the
+> held-out test split was degraded deterministically and the deployed int8 model
+> scored on every variant (`tools/robustness_sweep.py`, 431 images per condition,
+> routing threshold 0.40). Because each condition is applied to the same images,
+> every row is compared with the clean baseline by an exact McNemar test.
 >
-> Protocol: five subsets of ⟨MEASURE⟩ images each, captured with the production
-> camera and illumination, one subset per condition — (i) normal indoor lighting
-> ⟨MEASURE⟩ lux, (ii) low light below 50 lux with the internal LEDs only,
-> (iii) partial occlusion with a hand in frame, (iv) an item at the edge of the
-> cup, (v) an item in motion. Report top-1 accuracy and routing accuracy with
-> confidence intervals for each, and publish the image set alongside the table.
+> | Condition | top-1 | Δ vs clean | routing | refused to residual | *p* |
+> |---|---|---|---|---|---|
+> | as captured | 78.65 % | — | 94.90 % | 0.93 % | — |
+> | brightness ×0.30 (severe under-lighting) | **33.18 %** | **−45.47** | 87.47 % | 5.80 % | <0.0001 |
+> | brightness ×0.50 (internal LEDs only) | 70.07 % | −8.58 | 93.50 % | 2.32 % | 0.0001 |
+> | brightness ×1.60 (specular highlights) | 66.82 % | −11.83 | 91.88 % | 2.32 % | <0.0001 |
+> | contrast ×0.60 | 72.16 % | −6.49 | 93.74 % | 2.09 % | 0.0006 |
+> | gaussian blur, radius 1 | 77.49 % | −1.16 | 94.43 % | 1.86 % | 0.18 (n.s.) |
+> | gaussian blur, radius 2 (out of focus) | 74.25 % | −4.40 | 93.74 % | 2.32 % | 0.0005 |
+> | sensor noise σ = 0.03 | 76.10 % | −2.55 | 93.74 % | 2.09 % | 0.052 (n.s.) |
+> | sensor noise σ = 0.08 | 60.32 % | −18.33 | 89.10 % | 3.02 % | <0.0001 |
+> | JPEG quality 30 | 78.19 % | −0.46 | 94.66 % | 1.39 % | 0.79 (n.s.) |
+> | JPEG quality 10 | 74.94 % | −3.71 | 92.34 % | 3.25 % | 0.026 |
+> | rotated 10° | 80.74 % | +2.09 | 94.66 % | 2.32 % | 0.19 (n.s.) |
+> | rotated 20° | 76.80 % | −1.85 | 92.58 % | 2.32 % | 0.27 (n.s.) |
+> | 10 % occluded | 74.01 % | −4.64 | 93.04 % | 2.32 % | 0.014 |
+> | 25 % occluded | 59.63 % | −19.02 | 91.18 % | 3.48 % | <0.0001 |
+> | item at half resolution | 79.12 % | +0.47 | 94.66 % | 1.16 % | 0.50 (n.s.) |
+> | dim + blur + JPEG + tilt together | 76.33 % | −2.32 | 94.20 % | 1.62 % | 0.23 (n.s.) |
+>
+> Four results are worth carrying into the design discussion. (i) **Illumination
+> dominates every other factor** - both under- and over-exposure cost more than
+> blur, noise, compression or occlusion, which makes the LED ring and a fixed
+> exposure the highest-value hardware in the bill of materials and demotes the
+> camera resolution. (ii) **The model is indifferent to compression and scale**:
+> JPEG at quality 30 (−0.46 pp, *p* = 0.79) and a half-resolution item (+0.47 pp)
+> are inside the noise, so neither bandwidth nor the 128-pixel input is a
+> constraint. (iii) **Rotation up to 20° and 10 % occlusion are tolerable**, which
+> is the classifier's half of the carousel-alignment argument - the mechanical
+> measurement in §6.6 is still required. (iv) **The fail-safe does not detect
+> distribution shift.** At a third of the original brightness top-1 collapses to
+> 33.18 % while the confidence gate refuses only 5.80 % of items and routed
+> accuracy still reads 87.47 %, because the model stays confidently wrong. A
+> frame-quality guard (mean luminance and gradient energy measured before
+> inference) would catch this case; re-tuning the softmax threshold would not.
+>
+**The guard, measured.** `smart_bin/quality.py` implements that recommendation: three
+scalars computed from a 256-pixel thumbnail (mean luminance, luminance standard
+deviation, mean absolute Laplacian) with limits calibrated on the validation split so
+that **99.1 % of clean frames pass**. A frame that fails is routed to residual before
+the classifier is believed, and the reason is written into the decision:
+
+| Condition | top-1 (model alone) | accepted by the guard | accuracy on accepted |
+|---|---|---|---|
+| as captured | 78.65 % | 97.7 % | 79.33 % |
+| brightness ×0.50 | 70.07 % | 49.9 % | 69.30 % |
+| brightness ×0.30 | 33.18 % | **0.0 %** | — |
+| brightness ×1.60 | 66.82 % | 89.6 % | 68.13 % |
+| gaussian blur radius 2 | 74.25 % | 91.9 % | 76.26 % |
+| sensor noise σ = 0.08 | 60.32 % | 96.3 % | 61.45 % |
+| 25 % occluded | 59.63 % | 95.6 % | 60.92 % |
+
+The guard converts the catastrophic case into abstention - at a third of the normal
+brightness nothing is classified at all, so nothing can be put in the wrong
+compartment - and costs 2.3 % of coverage on good frames, where it slightly *raises*
+accuracy (79.33 % on the frames it accepts against 78.65 % overall). It does not
+catch over-exposure, sensor noise or occlusion, and it is not intended to: those need
+either a subject detector or a model trained on them. It is a tripwire for the
+lighting failure mode, and it is described that way in the model card.
+
+> **These are simulated degradations on white-background studio images**, applied to
+> a subject that is already centred and well lit, so they are an *upper bound* on
+> the damage these factors cause in a kitchen and not a substitute for field data:
+> the real failure modes are cluttered backgrounds and coloured ambient light, and
+> neither is simulated here. The capture campaign in the previous protocol is still
+> the measurement that closes this section - five subsets, one per condition
+> (normal ⟨MEASURE⟩ lux, below 50 lux with the LEDs only, a hand in frame, the item
+> at the edge of the cup, the item in motion), reported with confidence intervals
+> and published with the image set. Until then this table is what the report can
+> defend.
 
 `⟨DELETE⟩` Fig. 6.3 and the sentence "the internal LED ring was raised from 120 lux
 to 380 lux … recover most of the deficit" unless the lighting change is in the BOM
@@ -391,10 +468,15 @@ Replace Table A.I.1 with the files that exist (verify with `git ls-files`):
 | `smart_bin/onnx_export.py` | Python | ONNX export + float-versus-deployed verification |
 | `smart_bin/backends.py` | Python | ONNX and PyTorch inference backends |
 | `smart_bin/fusion.py` | Python | sensor fusion + fail-safe routing, with self-tests |
+| `smart_bin/quality.py` | Python | frame-quality guard (luminance, contrast, sharpness) |
 | `smart_bin/predict.py` | Python | image / folder / video / camera inference CLI |
 | `smart_bin/app.py` | Python | local dashboard and demo server |
 | `tools/verify_report_numbers.py` | Python | 42 arithmetic checks on this report |
-| `tools/smoke_test.py` | Python | 13 end-to-end checks of the pipeline |
+| `tools/smoke_test.py` | Python | 19 end-to-end checks of the pipeline |
+| `tools/robustness_sweep.py` | Python | §6.5 degradation study, with and without the guard |
+| `tools/compare_runs.py` | Python | paired run comparison: Wilson CIs, exact McNemar |
+| `tools/arch_sweep.py` | Python | per-model threshold tuning, then test scoring |
+| `tools/eval_onnx.py` | Python | scores the int8 artefact that actually ships |
 | `MODEL_CARD.md` | Markdown | intended use, metrics, limitations, ethics |
 
 **Appendix code listings:** either paste the files verbatim from the repository
@@ -411,11 +493,13 @@ previously printed contained `CLASS_INDEX`, which is defined nowhere, and a
 |---|---|---|
 | Fig. 6.1 (11 architectures vs latency) | **withdraw** — no benchmark exists | the §6.3 measured table, and `smart_bin/runs/architecture_compare.png` |
 | Fig. 6.2 (training curves) | **replace** | `smart_bin/runs/bingenie_mnv3s_128/training_curves.png` (real) |
-| Fig. 6.3 (5 operating conditions) | **withdraw until measured** | the §6.5 protocol table |
+| Fig. 6.3 (5 operating conditions) | **withdraw until measured** | the §6.5 synthetic-degradation table, and `smart_bin/runs/robustness_test.png` |
 | Fig. 6.4 (class distribution) | **replace** | distribution from the new decision log |
 | Fig. 6.5 (confidence ± std) | **replace** | per-class confidence from `metrics_test.json` |
 | new | **add** | `confusion_matrix_test.png` — the most informative figure in the chapter |
 | new | **add** | `docs/demo_predictions.jpg` — twelve real predictions with compartments |
+| new | **add** | `smart_bin/runs/robustness_test.png` — accuracy under 16 simulated capture conditions |
+| new | **add** | `smart_bin/runs/architecture_compare.png` — three backbones at equal budget |
 
 ---
 

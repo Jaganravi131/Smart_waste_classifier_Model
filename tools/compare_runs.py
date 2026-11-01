@@ -93,6 +93,16 @@ def score_checkpoint(run: Path, root: Path, split: str, threshold: float, tta: b
         decision = decide(list(labels), row, sensor=SensorReading(), threshold=threshold)
         routed_correct[index] = decision.stream == stream_for(labels[target])["stream"]
 
+    # A 6-class TrashNet taxonomy collapses onto two populated streams (five
+    # recyclables + one residual), so "routing accuracy" is dominated by how many
+    # items are recyclable. Quote it next to the degenerate predictor that always
+    # answers "recyclable", or the number means nothing.
+    stream_counts: dict[str, int] = {}
+    for target in targets:
+        name = str(stream_for(str(labels[int(target)]))["stream"])
+        stream_counts[name] = stream_counts.get(name, 0) + 1
+    routing_baseline = max(stream_counts.values()) / len(targets)
+
     per_class = {}
     f1_scores = []
     for index, name in enumerate(labels):
@@ -121,6 +131,7 @@ def score_checkpoint(run: Path, root: Path, split: str, threshold: float, tta: b
         "routing": float(routed_correct.mean()),
         "routing_ci": wilson(int(routed_correct.sum()), len(targets)),
         "macro_f1": float(np.mean(f1_scores)),
+        "routing_baseline": float(routing_baseline),
         "params": params,
         "params_m": round(params / 1e6, 2),
         "epochs": epochs,
@@ -171,7 +182,10 @@ def print_table(results: list[dict], split: str, threshold: float, tta: bool,
         print(f"  {r['run']:<{width}}"
               + "".join(f"{r['per_class'][c]['recall'] * 100:>9.1f}%" for c in classes))
 
-    print("\n  overlapping CIs mean the difference is not resolved by 431 images;"
+    print(f"\n  trivial routing baseline (always pick the majority stream): "
+          f"{results[0]['routing_baseline'] * 100:.2f} % - routing accuracy is only"
+          "\n  informative to the extent that it beats this.")
+    print("  overlapping CIs mean the difference is not resolved by 431 images;"
           "\n  run the pairwise mode for the McNemar test.")
 
 
@@ -229,6 +243,8 @@ def main() -> int:
         print(f"  {'  95 % CI':<22}{low_b * 100:>12.1f}-{high_b * 100:<4.1f}"
               f"{low_c * 100:>10.1f}-{high_c * 100:<4.1f}")
 
+    print(f"  {'trivial routing baseline (always pick the majority stream)':<48}"
+          f"{baseline['routing_baseline'] * 100:>8.2f} %")
     print(f"\n  {'class':<12}{'support':>8}{'recall (base)':>15}{'recall (new)':>16}")
     for name, values in baseline["per_class"].items():
         new = candidate["per_class"][name]["recall"]

@@ -1,0 +1,310 @@
+{
+  "run": "bingenie_mnv3s_128",
+  "precision": "int8",
+  "split": "test",
+  "threshold": 0.4,
+  "conditions": [
+    {
+      "condition": "clean",
+      "description": "as captured",
+      "top1": 0.7865,
+      "top1_ci": [
+        0.7454,
+        0.8226
+      ],
+      "routing": 0.949,
+      "refused_rate": 0.0093,
+      "mean_confidence": 0.8215,
+      "latency_ms": 23.46,
+      "seconds": 10.1
+    },
+    {
+      "condition": "dark",
+      "description": "brightness \u00d70.50 (dim room, LEDs only)",
+      "top1": 0.7007,
+      "top1_ci": [
+        0.6558,
+        0.742
+      ],
+      "routing": 0.935,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.7755,
+      "latency_ms": 24.06,
+      "seconds": 10.7,
+      "vs_clean_pp": -8.58,
+      "mcnemar_only_clean": 61,
+      "mcnemar_only_condition": 24,
+      "p_value": 0.0001
+    },
+    {
+      "condition": "very_dark",
+      "description": "brightness \u00d70.30",
+      "top1": 0.3318,
+      "top1_ci": [
+        0.289,
+        0.3776
+      ],
+      "routing": 0.8747,
+      "refused_rate": 0.058,
+      "mean_confidence": 0.6961,
+      "latency_ms": 24.78,
+      "seconds": 11.0,
+      "vs_clean_pp": -45.47,
+      "mcnemar_only_clean": 217,
+      "mcnemar_only_condition": 21,
+      "p_value": 0.0
+    },
+    {
+      "condition": "bright",
+      "description": "brightness \u00d71.60 (specular highlights)",
+      "top1": 0.6682,
+      "top1_ci": [
+        0.6224,
+        0.711
+      ],
+      "routing": 0.9188,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.7655,
+      "latency_ms": 25.9,
+      "seconds": 11.5,
+      "vs_clean_pp": -11.83,
+      "mcnemar_only_clean": 75,
+      "mcnemar_only_condition": 24,
+      "p_value": 0.0
+    },
+    {
+      "condition": "low_contrast",
+      "description": "contrast \u00d70.60",
+      "top1": 0.7216,
+      "top1_ci": [
+        0.6774,
+        0.7618
+      ],
+      "routing": 0.9374,
+      "refused_rate": 0.0209,
+      "mean_confidence": 0.7901,
+      "latency_ms": 26.53,
+      "seconds": 12.1,
+      "vs_clean_pp": -6.49,
+      "mcnemar_only_clean": 46,
+      "mcnemar_only_condition": 18,
+      "p_value": 0.0006
+    },
+    {
+      "condition": "blur1",
+      "description": "gaussian blur, radius 1",
+      "top1": 0.7749,
+      "top1_ci": [
+        0.7332,
+        0.8118
+      ],
+      "routing": 0.9443,
+      "refused_rate": 0.0186,
+      "mean_confidence": 0.8192,
+      "latency_ms": 22.4,
+      "seconds": 12.0,
+      "vs_clean_pp": -1.16,
+      "mcnemar_only_clean": 7,
+      "mcnemar_only_condition": 2,
+      "p_value": 0.1797
+    },
+    {
+      "condition": "blur2",
+      "description": "gaussian blur, radius 2 (out of focus)",
+      "top1": 0.7425,
+      "top1_ci": [
+        0.6992,
+        0.7815
+      ],
+      "routing": 0.9374,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.8092,
+      "latency_ms": 23.85,
+      "seconds": 12.8,
+      "vs_clean_pp": -4.4,
+      "mcnemar_only_clean": 24,
+      "mcnemar_only_condition": 5,
+      "p_value": 0.0005
+    },
+    {
+      "condition": "noise",
+      "description": "sensor noise \u03c3 = 0.03",
+      "top1": 0.761,
+      "top1_ci": [
+        0.7186,
+        0.7989
+      ],
+      "routing": 0.9374,
+      "refused_rate": 0.0209,
+      "mean_confidence": 0.8108,
+      "latency_ms": 22.42,
+      "seconds": 14.4,
+      "vs_clean_pp": -2.55,
+      "mcnemar_only_clean": 19,
+      "mcnemar_only_condition": 8,
+      "p_value": 0.0522
+    },
+    {
+      "condition": "heavy_noise",
+      "description": "sensor noise \u03c3 = 0.08",
+      "top1": 0.6032,
+      "top1_ci": [
+        0.5563,
+        0.6483
+      ],
+      "routing": 0.891,
+      "refused_rate": 0.0302,
+      "mean_confidence": 0.7913,
+      "latency_ms": 22.84,
+      "seconds": 14.8,
+      "vs_clean_pp": -18.33,
+      "mcnemar_only_clean": 96,
+      "mcnemar_only_condition": 17,
+      "p_value": 0.0
+    },
+    {
+      "condition": "jpeg_q30",
+      "description": "JPEG quality 30",
+      "top1": 0.7819,
+      "top1_ci": [
+        0.7405,
+        0.8183
+      ],
+      "routing": 0.9466,
+      "refused_rate": 0.0139,
+      "mean_confidence": 0.8196,
+      "latency_ms": 22.03,
+      "seconds": 10.2,
+      "vs_clean_pp": -0.46,
+      "mcnemar_only_clean": 8,
+      "mcnemar_only_condition": 6,
+      "p_value": 0.7905
+    },
+    {
+      "condition": "jpeg_q10",
+      "description": "JPEG quality 10",
+      "top1": 0.7494,
+      "top1_ci": [
+        0.7064,
+        0.788
+      ],
+      "routing": 0.9234,
+      "refused_rate": 0.0325,
+      "mean_confidence": 0.8165,
+      "latency_ms": 22.69,
+      "seconds": 10.5,
+      "vs_clean_pp": -3.71,
+      "mcnemar_only_clean": 31,
+      "mcnemar_only_condition": 15,
+      "p_value": 0.0259
+    },
+    {
+      "condition": "rot10",
+      "description": "rotated 10\u00b0",
+      "top1": 0.8074,
+      "top1_ci": [
+        0.7675,
+        0.8419
+      ],
+      "routing": 0.9466,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.8144,
+      "latency_ms": 25.36,
+      "seconds": 11.6,
+      "vs_clean_pp": 2.09,
+      "mcnemar_only_clean": 14,
+      "mcnemar_only_condition": 23,
+      "p_value": 0.1877
+    },
+    {
+      "condition": "rot20",
+      "description": "rotated 20\u00b0 (item sliding)",
+      "top1": 0.768,
+      "top1_ci": [
+        0.7259,
+        0.8054
+      ],
+      "routing": 0.9258,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.8055,
+      "latency_ms": 24.38,
+      "seconds": 11.2,
+      "vs_clean_pp": -1.85,
+      "mcnemar_only_clean": 24,
+      "mcnemar_only_condition": 16,
+      "p_value": 0.2682
+    },
+    {
+      "condition": "occl10",
+      "description": "10 % occluded (hand at the edge)",
+      "top1": 0.7401,
+      "top1_ci": [
+        0.6967,
+        0.7793
+      ],
+      "routing": 0.9304,
+      "refused_rate": 0.0232,
+      "mean_confidence": 0.7878,
+      "latency_ms": 23.4,
+      "seconds": 10.2,
+      "vs_clean_pp": -4.64,
+      "mcnemar_only_clean": 40,
+      "mcnemar_only_condition": 20,
+      "p_value": 0.0135
+    },
+    {
+      "condition": "occl25",
+      "description": "25 % occluded",
+      "top1": 0.5963,
+      "top1_ci": [
+        0.5493,
+        0.6416
+      ],
+      "routing": 0.9118,
+      "refused_rate": 0.0348,
+      "mean_confidence": 0.7504,
+      "latency_ms": 23.01,
+      "seconds": 10.1,
+      "vs_clean_pp": -19.02,
+      "mcnemar_only_clean": 108,
+      "mcnemar_only_condition": 26,
+      "p_value": 0.0
+    },
+    {
+      "condition": "small_item",
+      "description": "item at half resolution (far / small)",
+      "top1": 0.7912,
+      "top1_ci": [
+        0.7503,
+        0.8269
+      ],
+      "routing": 0.9466,
+      "refused_rate": 0.0116,
+      "mean_confidence": 0.8205,
+      "latency_ms": 22.8,
+      "seconds": 12.0,
+      "vs_clean_pp": 0.47,
+      "mcnemar_only_clean": 0,
+      "mcnemar_only_condition": 2,
+      "p_value": 0.5
+    },
+    {
+      "condition": "worst_realistic",
+      "description": "dim + blur + JPEG + tilt together",
+      "top1": 0.7633,
+      "top1_ci": [
+        0.721,
+        0.801
+      ],
+      "routing": 0.942,
+      "refused_rate": 0.0162,
+      "mean_confidence": 0.7949,
+      "latency_ms": 25.95,
+      "seconds": 14.7,
+      "vs_clean_pp": -2.32,
+      "mcnemar_only_clean": 33,
+      "mcnemar_only_condition": 23,
+      "p_value": 0.2288
+    }
+  ]
+}

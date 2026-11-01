@@ -12,6 +12,10 @@ smart_bin/runs/**
 !smart_bin/runs/**/summary.json
 !smart_bin/runs/**/history.json
 !smart_bin/runs/**/metrics_*.json
+!smart_bin/runs/**/robustness_*.json
+!smart_bin/runs/arch_sweep.json
+!smart_bin/runs/architecture_compare.png
+!smart_bin/runs/robustness_*.png
 !smart_bin/runs/**/training_curves.png
 !smart_bin/runs/**/confusion_matrix_*.png
 

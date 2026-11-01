@@ -61,7 +61,7 @@ Filled in by `smart_bin/evaluate_real.py` on the held-out test split:
 | Top-1 accuracy | 78.89 % (95 % CI 74.79 – 82.48 %) |
 | Top-3 accuracy | 94.66 % |
 | Macro F1 | 76.35 % |
-| Routing accuracy (correct compartment) | 94.90 % (CI 92.39 – 96.61 %) |
+| Routing accuracy (correct compartment) | 94.90 % (CI 92.39 – 96.61 %) — *baseline 93.27 %, see note* |
 | Items refused to residual | 0.93 % |
 | Expected calibration error (10 bins) | 0.055 |
 | Latency (CPU, 2 threads, batch 32) | 1.8 ms/image |
@@ -70,6 +70,12 @@ Filled in by `smart_bin/evaluate_real.py` on the held-out test split:
 Per-class recall: paper 86.1 %, cardboard 81.4 %, plastic 79.7 %, glass 79.3 %,
 metal 75.0 %, **trash 51.7 %** (CI 34.4 – 68.6 %). Full detail in
 `smart_bin/runs/bingenie_mnv3s_128/metrics_test.json`.
+
+**Read the routing number against its baseline.** Five of the six classes map to
+the recyclable compartment, so a predictor that always answers "recyclable" scores
+93.27 % on this split; the model is 1.63 pp above that. Routing accuracy is a
+product convenience, not evidence of skill — quote per-class recall. `tools/
+compare_runs.py` and `tools/arch_sweep.py` now print the baseline with the number.
 
 ### 4.1 The artefact that ships
 
@@ -95,7 +101,8 @@ interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
 1. From-scratch training on 1,768 images — a transfer-learning run (`--pretrained`)
    is the configuration to quote for comparison with the literature.
 2. Domain: white-background studio images. Performance on a kitchen bin with a
-   grey plastic cup background, partial occlusion and dim light is unmeasured.
+   grey plastic cup background, a cluttered bench or coloured ambient light is
+   unmeasured; dim light and occlusion have only been *simulated* (limit 6).
 3. Class imbalance: `trash` (91 training images) has the weakest recall, and only
    29 test images support it, so its 51.7 % has a ±17 pp interval.
 4. No calibration on device data. The 0.40 threshold in `fusion.py` is a *deliberate*
@@ -107,7 +114,20 @@ interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
    0.40 is kept as the fail-safe trade-off. On unknown backgrounds the confidence
    distribution will shift and this threshold must be re-measured.
 5. 128 px input: fast, but unsuitable for fine material distinctions (foil vs paper).
-6. Single-label output: an item that is genuinely two materials (a laminated cup) is
+6. **Capture conditions are the dominant risk, and the confidence gate does not
+   detect them.** Degrading the test split (`tools/robustness_sweep.py`) costs
+   8.6 pp at half brightness, 11.8 pp when over-exposed, 4.4 pp at blur radius 2 and
+   19.0 pp at 25 % occlusion, while JPEG quality 30, ±20° rotation and a
+   half-resolution item are all inside the noise. At a third of the original
+   brightness top-1 falls to 33.2 % but only 5.8 % of items are refused, because the
+   model stays confidently wrong. `smart_bin/quality.py` therefore refuses such a
+   frame before the classifier is believed: at a third of normal brightness the
+   guard accepts **0 %** of frames (nothing can be mis-sorted) at the cost of 2.3 %
+   of coverage on good frames, where accuracy on the accepted frames is 79.33 %.
+   It does not catch over-exposure, noise or occlusion - it is a lighting tripwire,
+   not a general out-of-distribution detector. Synthetic degradation is an upper
+   bound, not a field result.
+7. Single-label output: an item that is genuinely two materials (a laminated cup) is
    forced into one class; the design answer is the confidence threshold + residual
    fallback, not a better label.
 

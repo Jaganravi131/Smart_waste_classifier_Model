@@ -205,6 +205,46 @@ def main() -> int:
             server.shutdown()
             server.server_close()
 
+    # -- frame-quality guard -------------------------------------------------
+    try:
+        from PIL import Image as _Image
+
+        from quality import assess_quality
+
+        normal = _Image.new("RGB", (96, 96), (210, 210, 210))
+        for x in range(0, 96, 6):
+            for y in range(96):
+                normal.putpixel((x, y), (30, 30, 30))
+        report("quality guard passes a well-lit frame", assess_quality(normal).ok,
+               "luminance 0.7")
+
+        dark = _Image.new("RGB", (96, 96), (10, 10, 10))
+        verdict = assess_quality(dark)
+        report("quality guard refuses a black frame", not verdict.ok and bool(verdict.reasons),
+               verdict.reasons[0] if verdict.reasons else "no reason given")
+    except Exception as exc:  # noqa: BLE001
+        report("quality guard", False, f"{exc.__class__.__name__}: {exc}")
+
+    try:
+        from PIL import ImageEnhance
+
+        from predict import Classifier
+
+        classifier = Classifier(args.checkpoint, backend=args.backend, onnx=args.onnx)
+        frames = sorted((REPO / "smart_bin" / "datasets" / "trashnet" / "test").glob("*/*.jpg"))
+        if not frames:
+            raise SystemExit("no test images")
+        with _Image.open(frames[0]) as handle:
+            frame = handle.convert("RGB")
+        clear_decision, _ = classifier.classify(frame, threshold=0.40, guard=True)
+        dark_decision, _ = classifier.classify(ImageEnhance.Brightness(frame).enhance(0.25),
+                                               threshold=0.40, guard=True)
+        report("guard converts a dark frame into a refusal",
+               dark_decision.to_residual and clear_decision.quality is not None,
+               f"clean refused={clear_decision.to_residual}, dark refused={dark_decision.to_residual}")
+    except Exception as exc:  # noqa: BLE001
+        report("guard end-to-end", False, f"{exc.__class__.__name__}: {exc}")
+
     print()
     print(f"{len(PASSED)} passed, {len(FAILED)} failed"
           + (f", {len(SKIPPED)} skipped" if SKIPPED else ""))

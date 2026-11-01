@@ -27,6 +27,7 @@ import csv
 import json
 import time
 from collections import deque
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
@@ -37,6 +38,7 @@ from PIL import Image
 from backends import find_artifacts, make_backend
 from fusion import SensorReading, decide
 from model import STREAMS, stream_for
+from quality import assess_quality
 
 BASE_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BASE_DIR / "runs"
@@ -99,10 +101,26 @@ class Classifier:
         return self.backend.probabilities(image)
 
     def classify(self, image: Image.Image, threshold: float = 0.40, margin: float = 0.0,
-                 sensor: Optional[SensorReading] = None):
+                 sensor: Optional[SensorReading] = None, guard: bool = True):
+        """Classify one frame.
+
+        `guard=True` runs the frame-quality tripwire first (see `quality.py`). It is
+        an *additional* reason to refuse, never a reason to accept: a frame that is
+        too dark or too flat goes to residual even when the model is confident,
+        because the robustness sweep showed exactly that case - 33 % top-1 while only
+        5.8 % of items were refused.
+        """
         started = time.perf_counter()
+        report = assess_quality(image) if guard else None
         probs = self.probabilities(image)
         decision = decide(self.labels, probs, sensor=sensor, threshold=threshold, margin_threshold=margin)
+        if report is not None and not report.ok and not decision.to_residual:
+            # drop "vision verdict accepted ..." - it is no longer true once the
+            # frame itself is the reason for refusing
+            kept = [r for r in decision.reasons if not r.startswith("vision verdict accepted")]
+            decision = replace(decision, stream="residual", to_residual=True,
+                               reasons=kept + report.reasons)
+        decision.quality = report.as_dict() if report is not None else None  # type: ignore[attr-defined]
         decision.latency_ms = (time.perf_counter() - started) * 1000  # type: ignore[attr-defined]
         ranking = sorted(zip(self.labels, probs.tolist()), key=lambda kv: -kv[1])
         return decision, ranking

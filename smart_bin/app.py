@@ -121,6 +121,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(
                 {
                     "decision": decision.as_dict(),
+                    "quality": getattr(decision, "quality", None),
                     "ranking": [[name, round(prob, 4)] for name, prob in ranking[:6]],
                     "latency_ms": round(getattr(decision, "latency_ms", 0.0), 1),
                     "runtime": CLASSIFIER.runtime_label,

@@ -94,6 +94,7 @@ instead of the from-scratch baseline.
 | `smart_bin/train_real.py` | training loop, real curves, history JSON |
 | `smart_bin/evaluate_real.py` | held-out evaluation, confidence intervals, `--sweep` for the routing threshold |
 | `smart_bin/fusion.py` | sensor fusion, fail-safe routing, self-tests |
+| `smart_bin/quality.py` | frame-quality guard: refuses frames too dark or too flat to trust |
 | `smart_bin/onnx_export.py` | ONNX export + float-versus-deployed verification |
 | `smart_bin/backends.py` | ONNX (light) and PyTorch inference backends |
 | `smart_bin/predict.py` | image / folder / video / camera inference CLI |
@@ -102,6 +103,7 @@ instead of the from-scratch baseline.
 | `tools/eval_onnx.py` | scores the deployed int8 ONNX artefact and sweeps its threshold |
 | `tools/arch_sweep.py` | tunes each model's routing threshold on val, then scores test |
 | `tools/plot_arch_compare.py` | validation curves of several runs, by epoch and by CPU-minute |
+| `tools/robustness_sweep.py` | accuracy under simulated dim light, blur, noise, occlusion, tilt |
 | `smart_bin/ui.py` | the demo page: markup, CSS and vanilla JS, no build step |
 | `smart_bin/train.py`, `detect_smartbin.py`, `eval_per_class.py`, `analyze_runtime_bias.py` | legacy YOLOv8-cls path, kept working, bugs fixed |
 | `tools/bootstrap.py` | one-command rebuild: env → dataset → weights → ONNX → demo |
