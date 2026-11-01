@@ -104,7 +104,9 @@ interval is roughly ±2 pp, so "95.42 %" is not a meaningful level of precision.
    grey plastic cup background, a cluttered bench or coloured ambient light is
    unmeasured; dim light and occlusion have only been *simulated* (limit 6).
 3. Class imbalance: `trash` (91 training images) has the weakest recall, and only
-   29 test images support it, so its 51.7 % has a ±17 pp interval.
+   29 test images support it, so its 51.7 % has a ±17 pp interval. Class-balanced
+   sampling was tried and did not fix it (`trash` recall 48.3 %, top-1 77.3 %,
+   p = 0.44); the limit is the variety of those 91 images, not their frequency.
 4. No calibration on *device* data. On the held-out split the int8 softmax is
    already close to calibrated — temperature scaling fitted on validation finds
    T = 0.961 and does not improve test ECE (0.0625 → 0.0716), so no temperature is

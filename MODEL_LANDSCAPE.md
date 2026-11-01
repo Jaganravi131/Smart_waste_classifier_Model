@@ -251,6 +251,32 @@ table is a *relative* ranking under equal compute, not each architecture's ceili
 The shipped model was trained for 110 epochs and lands 6.7 pp higher than its own
 30-epoch entry above.
 
+### 7.3 The obvious fix for `trash`, tried and rejected
+
+`trash` is the failure class: 91 training images against 403 for paper, and recall
+that has sat near 50 % in every run. The textbook answer is class-balanced sampling,
+so it was run with everything else held fixed — same 128 px input, same 110-epoch
+schedule, same seed, `--balanced` (inverse-frequency sampling, `trash` drawn 4.4×
+as often):
+
+| same protocol, `--balanced` the only difference | shipped | balanced |
+|---|---|---|
+| test top-1 | **78.89 %** | 77.26 % |
+| macro-F1 | **76.35 %** | 74.95 % |
+| routing accuracy | 94.90 % | **95.36 %** |
+| `trash` recall | **51.72 %** | 48.28 % |
+| `trash` precision | 71.43 % | **82.35 %** |
+| `plastic` recall | **79.73 %** | 70.27 % |
+| `cardboard` recall | 81.43 % | **85.71 %** |
+
+Exact McNemar on top-1: 34 vs 27 discordant images, **p = 0.44**; on routing, 8 vs
+10, **p = 0.81**. Neither difference is significant, so the honest statement is that
+re-weighting did not help: it moved `trash` from a recall-heavy to a
+precision-heavy operating point without making the class more separable, and it cost
+`plastic` nine points. The class is limited by the *variety* of its 91 images, not by
+how often they are drawn — which is why the recommendation in §8.3 is more data, and
+specifically more kinds of trash, rather than a different loss.
+
 ---
 
 ## 8. Recommendation
@@ -276,9 +302,9 @@ Ranked by value per hour spent, on our own evidence:
    Re-export, re-evaluate, re-run `tools/eval_onnx.py --sweep` to re-pick the
    threshold, and swap the artefacts only if `tools/compare_runs.py` clears p < 0.05.
 3. **If the vocabulary is the real complaint** (our `trash` class has 91 training
-   images), the move is not a bigger model but a better taxonomy: the 30-class CLIP
-   fine-tune or a RealWaste-trained 9-class head. That is a data-collection project
-   as much as a modelling one.
+   images), the move is not a bigger model and, per §7.3, not class re-weighting
+   either: the 30-class CLIP fine-tune or a RealWaste-trained 9-class head, plus more
+   *kinds* of trash. That is a data-collection project as much as a modelling one.
 4. **Do not** start with detection or segmentation. Our frame holds one object and
    the confidence threshold already handles ambiguity; detectors would add an
    annotation problem to a labelling problem we have not solved.

@@ -447,6 +447,17 @@ the new decision log.
 > earlier 31 h claim implies a 2.32 W average draw for a unit whose single-board
 > computer idles at 2.7 W, so it has been withdrawn pending a real discharge test.
 
+> **A fix that was tried and did not work.** `trash`-class recall has been the
+> persistent weakness, and class-balanced sampling is the standard remedy, so it was
+> run with every other setting held fixed (same 128 px input, same 110-epoch
+> schedule, same seed; `trash` drawn 4.4 times as often). Result: top-1 77.26 %
+> against 78.89 %, `trash` recall 48.28 % against 51.72 %, `trash` precision 82.35 %
+> against 71.43 %, `plastic` recall down 9.5 points. An exact McNemar test finds no
+> significant difference on either top-1 (34 vs 27 discordant, *p* = 0.44) or routing
+> (8 vs 10, *p* = 0.81). The class is limited by the variety of its 91 images rather
+> than by how often they are sampled, which is why the plan for it is more data, not
+> a different loss. Method and per-class table in `MODEL_LANDSCAPE.md` §7.3.
+
 ### §7.4 Comparison table — replacement
 
 | System | Top-1 accuracy | Physical sorting | Runs on-device | Unit cost |
