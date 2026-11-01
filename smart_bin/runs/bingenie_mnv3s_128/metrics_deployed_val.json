@@ -1,0 +1,81 @@
+{
+  "images": 328,
+  "threshold": 0.4,
+  "tta": false,
+  "top1_accuracy": 0.7835,
+  "routing_accuracy_streams": 0.9695,
+  "residual_rate": 0.0091,
+  "coverage": 0.9909,
+  "mean_confidence": 0.8148,
+  "latency_ms_per_image": 30.51,
+  "per_class_recall": {
+    "cardboard": 0.8913,
+    "glass": 0.7692,
+    "metal": 0.8214,
+    "paper": 0.8795,
+    "plastic": 0.5902,
+    "trash": 0.6471
+  },
+  "threshold_sweep": [
+    {
+      "threshold": 0.2,
+      "routing_accuracy_streams": 0.9726,
+      "residual_rate": 0.0,
+      "coverage": 1.0
+    },
+    {
+      "threshold": 0.25,
+      "routing_accuracy_streams": 0.9726,
+      "residual_rate": 0.0,
+      "coverage": 1.0
+    },
+    {
+      "threshold": 0.3,
+      "routing_accuracy_streams": 0.9726,
+      "residual_rate": 0.0,
+      "coverage": 1.0
+    },
+    {
+      "threshold": 0.35,
+      "routing_accuracy_streams": 0.9726,
+      "residual_rate": 0.0,
+      "coverage": 1.0
+    },
+    {
+      "threshold": 0.4,
+      "routing_accuracy_streams": 0.9695,
+      "residual_rate": 0.0091,
+      "coverage": 0.9909
+    },
+    {
+      "threshold": 0.45,
+      "routing_accuracy_streams": 0.9512,
+      "residual_rate": 0.0366,
+      "coverage": 0.9634
+    },
+    {
+      "threshold": 0.5,
+      "routing_accuracy_streams": 0.9207,
+      "residual_rate": 0.0793,
+      "coverage": 0.9207
+    },
+    {
+      "threshold": 0.55,
+      "routing_accuracy_streams": 0.9055,
+      "residual_rate": 0.0945,
+      "coverage": 0.9055
+    },
+    {
+      "threshold": 0.6,
+      "routing_accuracy_streams": 0.875,
+      "residual_rate": 0.1341,
+      "coverage": 0.8659
+    },
+    {
+      "threshold": 0.65,
+      "routing_accuracy_streams": 0.8567,
+      "residual_rate": 0.1524,
+      "coverage": 0.8476
+    }
+  ]
+}

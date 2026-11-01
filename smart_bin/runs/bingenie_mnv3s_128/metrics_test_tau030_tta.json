@@ -1,0 +1,152 @@
+{
+  "run": "bingenie_mnv3s_128",
+  "split": "test",
+  "images": 431,
+  "top1_accuracy": 0.7981,
+  "top1_ci95": [
+    0.7577,
+    0.8333
+  ],
+  "top3_accuracy": 0.9466,
+  "macro_f1": 0.7744,
+  "routing_accuracy_streams": 0.9606,
+  "routing_ci95": [
+    0.9377,
+    0.9752
+  ],
+  "residual_rate": 0.0,
+  "fusion_override_rate": 0.0,
+  "fusion_rules_available": true,
+  "threshold": 0.3,
+  "tta": true,
+  "mean_confidence": 0.8067,
+  "ece_10bin": 0.0707,
+  "latency_ms_per_image": 3.37,
+  "threshold_sweep": [],
+  "per_class": {
+    "cardboard": {
+      "support": 70,
+      "precision": 0.8657,
+      "recall": 0.8286,
+      "f1": 0.8467,
+      "recall_ci95": [
+        0.7238,
+        0.8991
+      ],
+      "mean_confidence": 0.8531
+    },
+    "glass": {
+      "support": 82,
+      "precision": 0.7253,
+      "recall": 0.8049,
+      "f1": 0.763,
+      "recall_ci95": [
+        0.7063,
+        0.8762
+      ],
+      "mean_confidence": 0.7923
+    },
+    "metal": {
+      "support": 68,
+      "precision": 0.7183,
+      "recall": 0.75,
+      "f1": 0.7338,
+      "recall_ci95": [
+        0.6356,
+        0.8377
+      ],
+      "mean_confidence": 0.743
+    },
+    "paper": {
+      "support": 108,
+      "precision": 0.8727,
+      "recall": 0.8889,
+      "f1": 0.8807,
+      "recall_ci95": [
+        0.8158,
+        0.9353
+      ],
+      "mean_confidence": 0.8353
+    },
+    "plastic": {
+      "support": 74,
+      "precision": 0.7838,
+      "recall": 0.7838,
+      "f1": 0.7838,
+      "recall_ci95": [
+        0.6773,
+        0.8623
+      ],
+      "mean_confidence": 0.8283
+    },
+    "trash": {
+      "support": 29,
+      "precision": 0.8333,
+      "recall": 0.5172,
+      "f1": 0.6383,
+      "recall_ci95": [
+        0.3443,
+        0.6861
+      ],
+      "mean_confidence": 0.7235
+    }
+  },
+  "confusion_matrix": [
+    [
+      58,
+      2,
+      5,
+      2,
+      3,
+      0
+    ],
+    [
+      1,
+      66,
+      7,
+      2,
+      6,
+      0
+    ],
+    [
+      1,
+      8,
+      51,
+      5,
+      2,
+      1
+    ],
+    [
+      3,
+      3,
+      4,
+      96,
+      1,
+      1
+    ],
+    [
+      2,
+      6,
+      3,
+      4,
+      58,
+      1
+    ],
+    [
+      2,
+      6,
+      1,
+      1,
+      4,
+      15
+    ]
+  ],
+  "labels": [
+    "cardboard",
+    "glass",
+    "metal",
+    "paper",
+    "plastic",
+    "trash"
+  ]
+}

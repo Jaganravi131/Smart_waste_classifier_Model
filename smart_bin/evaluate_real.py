@@ -101,6 +101,8 @@ def main() -> int:
     parser.add_argument("--split", default="test", choices=["train", "val", "test"])
     parser.add_argument("--data", type=Path, default=TRASHNET_DIR)
     parser.add_argument("--batch", type=int, default=32)
+    parser.add_argument("--sweep", action="store_true",
+                        help="also report the routing threshold trade-off (use it on the val split)")
     parser.add_argument("--threshold", type=float, default=0.40,
                         help="below this top-1 probability the item is routed to residual")
     parser.add_argument("--tta", action="store_true", help="average original + horizontal flip")
@@ -194,10 +196,33 @@ def main() -> int:
 
     probs_arr = np.array(all_probs)
     targets_arr = np.array(all_targets)
+
+    # ---- threshold sweep -------------------------------------------------
+    # The operating threshold belongs to the model it was measured on: a model
+    # regularised with MixUp/EMA is systematically less confident, and 0.40 -
+    # tuned on the previous run - refuses 6 % of items instead of 1 %.  This is
+    # the table that picks the threshold, and it belongs on the VALIDATION split.
+    total = len(targets_arr)
+    threshold_sweep = []
+    if args.sweep:
+        for candidate in [x / 100 for x in range(20, 66, 5)]:
+            routed_right = refused = 0
+            for row, target in zip(probs_arr, targets_arr):
+                decision = decide(class_names=list(labels), probabilities=row,
+                                  sensor=SensorReading(), threshold=candidate)
+                if decision.to_residual:
+                    refused += 1
+                if decision.stream == true_streams[target]:
+                    routed_right += 1
+            threshold_sweep.append({
+                "threshold": candidate,
+                "routing_accuracy": round(routed_right / total, 4),
+                "residual_rate": round(refused / total, 4),
+                "coverage": round(1 - refused / total, 4),
+            })
     preds_arr = probs_arr.argmax(1)
     correct_mask = (preds_arr == targets_arr)
     confidences = probs_arr.max(1)
-    total = len(targets_arr)
 
     top1 = correct_mask.mean()
     ranked = np.argsort(-probs_arr, axis=1)
@@ -241,6 +266,7 @@ def main() -> int:
         "mean_confidence": round(float(confidences.mean()), 4),
         "ece_10bin": round(expected_calibration_error(confidences, correct_mask.astype(float)), 4),
         "latency_ms_per_image": round(float(np.mean(latency_ms)), 2),
+        "threshold_sweep": threshold_sweep,
         "per_class": per_class,
         "confusion_matrix": confusion.tolist(),
         "labels": list(labels),
@@ -256,6 +282,15 @@ def main() -> int:
     print(f"  sent to residual bin   : {results['residual_rate'] * 100:.2f} % of items")
     print(f"  mean confidence        : {results['mean_confidence']:.4f}   ECE(10) {results['ece_10bin']:.4f}")
     print(f"  CPU latency            : {results['latency_ms_per_image']:.1f} ms/image")
+
+    if threshold_sweep:
+        best = max(threshold_sweep, key=lambda row: (row["routing_accuracy"], row["coverage"]))
+        print("\n  threshold sweep (routing accuracy, measured on this split):")
+        print(f"    {'threshold':>9}{'routing':>10}{'refused':>10}{'coverage':>10}")
+        for row in threshold_sweep:
+            marker = "  <- best" if row is best else ""
+            print(f"    {row['threshold']:>9.2f}{row['routing_accuracy'] * 100:>9.2f}%"
+                  f"{row['residual_rate'] * 100:>9.2f}%{row['coverage'] * 100:>9.2f}%{marker}")
     print()
     print("  class        support  precision  recall     f1     mean conf")
     for name, m in per_class.items():

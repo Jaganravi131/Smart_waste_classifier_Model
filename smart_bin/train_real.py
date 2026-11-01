@@ -57,15 +57,22 @@ def set_seed(seed: int) -> None:
 
 
 def make_loader(root: Path, imgsz: int, train: bool, batch: int, workers: int,
-                scale_min: float = 0.55, rotation: int = 20) -> DataLoader:
+                scale_min: float = 0.55, rotation: int = 20,
+                balanced: bool = False) -> DataLoader:
     dataset = ImageFolder(
         root,
         transform=train_transform(imgsz, scale_min, rotation) if train else eval_transform(imgsz),
     )
+    sampler = None
+    if train and balanced:
+        from torch.utils.data import WeightedRandomSampler
+
+        sampler = WeightedRandomSampler(class_weights(dataset), num_samples=len(dataset), replacement=True)
     return DataLoader(
         dataset,
         batch_size=batch,
-        shuffle=train,
+        shuffle=train and sampler is None,
+        sampler=sampler,
         num_workers=workers,
         pin_memory=False,
         drop_last=train,
@@ -83,6 +90,59 @@ def evaluate(model: nn.Module, loader: DataLoader, criterion: nn.Module, device:
         correct += (logits.argmax(1) == targets).sum().item()
         seen += targets.size(0)
     return total_loss / max(seen, 1), correct / max(seen, 1)
+
+
+def mix_batch(images, targets, num_classes: int, alpha: float):
+    """MixUp / CutMix for one batch.
+
+    Both were added for the 160 px run: on 1,768 images the model memorises the
+    training set by epoch ~60 (train acc 0.94 against val 0.80), and mixing is the
+    one regulariser that attacks that directly. Returns the mixed batch, both
+    target sets and lambda, so the loss can be the convex combination.
+    """
+    lam = float(np.random.beta(alpha, alpha))
+    if lam > 0.5:                      # keep lambda >= 0.5 so the batch stays mostly itself
+        lam = 1.0 - lam
+    permutation = torch.randperm(images.size(0))
+    if np.random.rand() < 0.5:         # CutMix: paste a box from another image
+        height, width = images.shape[2], images.shape[3]
+        ratio = math.sqrt(1.0 - lam)
+        cut_h, cut_w = int(height * ratio), int(width * ratio)
+        top, left = np.random.randint(0, height - cut_h + 1), np.random.randint(0, width - cut_w + 1)
+        images = images.clone()
+        images[:, :, top:top + cut_h, left:left + cut_w] = images[permutation, :, top:top + cut_h, left:left + cut_w]
+        lam = 1.0 - (cut_h * cut_w) / (height * width)
+    else:                              # MixUp: linear combination of the pixels
+        images = lam * images + (1.0 - lam) * images[permutation]
+    return images, targets, targets[permutation], lam
+
+
+class ModelEma:
+    """Exponential moving average of the weights - cheap variance reduction."""
+
+    def __init__(self, model: nn.Module, decay: float = 0.999):
+        import copy
+
+        self.module = copy.deepcopy(model).eval()
+        for parameter in self.module.parameters():
+            parameter.requires_grad_(False)
+        self.decay = decay
+
+    @torch.no_grad()
+    def update(self, model: nn.Module) -> None:
+        for ema_parameter, parameter in zip(self.module.state_dict().values(), model.state_dict().values()):
+            if ema_parameter.dtype.is_floating_point:
+                ema_parameter.mul_(self.decay).add_(parameter.detach(), alpha=1.0 - self.decay)
+            else:
+                ema_parameter.copy_(parameter)
+
+
+def class_weights(dataset) -> list[float]:
+    """Inverse-frequency weights, so `trash` (91 images) is not drowned out."""
+    targets = [target for _, target in dataset.samples]
+    counts = np.bincount(targets, minlength=len(dataset.classes)).astype(float)
+    weights = 1.0 / np.clip(counts, 1, None)
+    return (weights / weights.sum() * len(counts)).tolist()
 
 
 def cosine_with_warmup(step: int, total_steps: int, warmup_steps: int, base_lr: float, min_lr: float) -> float:
@@ -147,6 +207,12 @@ def main() -> int:
                         help="lower bound of the RandomResizedCrop area (raise it when training from scratch)")
     parser.add_argument("--rotation", type=int, default=20, help="max RandomRotation in degrees")
     parser.add_argument("--pretrained", action="store_true", help="use ImageNet weights if available")
+    parser.add_argument("--mixup", type=float, default=0.0,
+                        help="alpha for MixUp/CutMix (0 = off; 0.2 is a good default)")
+    parser.add_argument("--ema", action="store_true", help="evaluate a moving average of the weights")
+    parser.add_argument("--ema-decay", type=float, default=0.999)
+    parser.add_argument("--balanced", action="store_true",
+                        help="sample classes inversely to their frequency (helps `trash`)")
     parser.add_argument("--name", default=None, help="run folder name")
     args = parser.parse_args()
 
@@ -181,7 +247,7 @@ def main() -> int:
     print()
 
     train_loader = make_loader(train_dir, args.imgsz, True, args.batch, args.workers,
-                               args.scale_min, args.rotation)
+                               args.scale_min, args.rotation, args.balanced)
     val_loader = make_loader(val_dir, args.imgsz, False, args.batch, args.workers)
     print(f"  train images : {len(train_loader.dataset)}  ({len(train_loader)} batches)")
     print(f"  val images   : {len(val_loader.dataset)}")
@@ -189,6 +255,9 @@ def main() -> int:
 
     model = build_model(args.model, len(labels), pretrained=args.pretrained).to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
+    ema = ModelEma(model, args.ema_decay) if args.ema else None
+    print(f"  regularisers : mixup {args.mixup or 'off'}  ema {'on' if ema else 'off'}  "
+          f"balanced sampling {'on' if args.balanced else 'off'}")
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     total_steps = args.epochs * max(len(train_loader), 1)
@@ -218,18 +287,40 @@ def main() -> int:
 
             images, targets = images.to(device), targets.to(device)
             optimizer.zero_grad(set_to_none=True)
-            logits = model(images)
-            loss = criterion(logits, targets)
+            if args.mixup > 0:
+                images, targets_a, targets_b, lam = mix_batch(images, targets, len(labels), args.mixup)
+                logits = model(images)
+                loss = lam * criterion(logits, targets_a) + (1.0 - lam) * criterion(logits, targets_b)
+                # Accuracy under mixing is the convex combination too, otherwise the
+                # training curve reads 1.00 by epoch 3 and looks like over-fitting.
+                predictions = logits.argmax(1)
+                batch_correct = (lam * (predictions == targets_a).sum().item()
+                                 + (1.0 - lam) * (predictions == targets_b).sum().item())
+            else:
+                logits = model(images)
+                loss = criterion(logits, targets)
+                batch_correct = (logits.argmax(1) == targets).sum().item()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
+            if ema is not None:
+                ema.update(model)
 
             running_loss += loss.item() * targets.size(0)
-            correct += (logits.argmax(1) == targets).sum().item()
+            correct += batch_correct
             seen += targets.size(0)
 
         train_loss, train_acc = running_loss / max(seen, 1), correct / max(seen, 1)
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        if ema is not None:
+            ema_loss, ema_acc = evaluate(ema.module, val_loader, criterion, device)
+            if ema_acc > val_acc:            # report the better of the two, and say which
+                val_loss, val_acc = ema_loss, ema_acc
+                evaluated = "ema"
+            else:
+                evaluated = "raw"
+        else:
+            evaluated = "raw"
 
         history["epoch"].append(epoch)
         history["train_loss"].append(round(train_loss, 5))
@@ -243,13 +334,13 @@ def main() -> int:
             best_val, best_epoch = val_acc, epoch
             save_checkpoint(
                 best_path,
-                model,
+                ema.module if (ema is not None and evaluated == "ema") else model,
                 labels,
                 args.model,
                 args.imgsz,
-                extra={"val_acc": val_acc, "epoch": epoch, "run": run_name},
+                extra={"val_acc": val_acc, "epoch": epoch, "run": run_name, "weights": evaluated},
             )
-            flag = "  <- best"
+            flag = f"  <- best ({evaluated})"
         print(
             f"  ep {epoch:3d}/{args.epochs}  train {train_loss:.4f}/{train_acc:.4f}  "
             f"val {val_loss:.4f}/{val_acc:.4f}  lr {lr:.2e}  {time.time() - epoch_started:5.1f}s{flag}"
@@ -263,6 +354,9 @@ def main() -> int:
         "run": run_name,
         "model": args.model,
         "pretrained_init": bool(args.pretrained),
+        "mixup_alpha": args.mixup,
+        "ema": bool(args.ema),
+        "balanced_sampling": bool(args.balanced),
         "imgsz": args.imgsz,
         "epochs": args.epochs,
         "batch": args.batch,

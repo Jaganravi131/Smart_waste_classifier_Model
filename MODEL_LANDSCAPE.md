@@ -159,31 +159,93 @@ our gap is the missing ImageNet initialisation, not the architecture.** It also
 means switching to a bigger model without changing the initialisation policy would
 buy much less than the papers imply.
 
+### 7.1 The one upgrade experiment we did run
+
+Instead of trusting that argument, `bingenie_mnv3s_160` was trained on the same
+split with the same recipe plus the regularisation that usually pays for extra
+resolution: 160 px input, MixUp 0.2, EMA 0.999, balanced sampling. 90 epochs,
+45.8 min on the same 2 cores, best validation 0.835 and still rising when the
+budget ran out.
+
+The first comparison looked like a wash, but it was not a fair one: it held the
+routing threshold at 0.40, a value tuned on the *previous* model. The 160 px model
+is systematically less confident (mean top-1 0.733 vs 0.821), so a fixed 0.40 sent
+6.03 % of items to `residual` instead of 0.93 %, and routing accuracy fell. Re-tuning
+the threshold on validation for each model separately (`evaluate_real.py --sweep`,
+`tools/eval_onnx.py --sweep`) gives the like-for-like number:
+
+| Same 431 test images, threshold tuned per model on val, hflip TTA on | 128 px (shipped) | 160 px + MixUp + EMA |
+|---|---|---|
+| top-1 accuracy | 79.81 % (75.8–83.3) | **81.21 %** (77.2–84.6) |
+| routing accuracy | 96.06 % (93.8–97.5) | **97.22 %** (95.2–98.4) |
+| macro-F1 | 77.44 % | **80.06 %** |
+| residual rate | 0.00 % | 0.70 % |
+| trash recall | 51.7 % | **69.0 %** |
+| glass recall | **80.5 %** | 76.8 % |
+| inference latency | 3.4 ms | 5.1 ms |
+
+McNemar, exact, on the paired predictions: top-1 23 vs 29 discordant (**p = 0.49**),
+routing 6 vs 11 (**p = 0.33**). So the honest verdict is **+1.4 pp, inside the noise**:
+the model is better on the class we care about most (`trash`, +17 pp) and worse on
+`glass`, and 431 images cannot resolve a difference that small. It is not worth
+doubling the artefact to ship it, but it is a genuinely well-behaved run and it
+belongs in the report as the second data point.
+
+The same sweep found free headroom in the model we already ship. Scoring the *int8
+ONNX artefact itself* on the test split:
+
+| shipped `bingenie_mnv3s_128_int8.onnx` | top-1 | routing | residual rate | latency |
+|---|---|---|---|---|
+| threshold 0.40, no TTA (as shipped) | 78.65 % | 94.90 % | 0.93 % | 30.6 ms |
+| threshold 0.30, no TTA | 78.65 % | 95.13 % | 0.23 % | 26.2 ms |
+| threshold 0.30 + hflip TTA | 79.35 % | **96.06 %** | 0.00 % | 58.6 ms |
+
+The trade-off is real and should be stated as such: on validation the model is never
+less than 0.30 confident, so lowering the threshold to 0.30 recovers routing accuracy
+but **effectively disables the fail-safe** — nothing is ever refused. 0.40 is kept as
+the shipped default because a bin that abstains on a genuinely ambiguous item is a
+feature, not a bug; the numbers above exist so the choice is documented rather than
+implicit.
+
 ---
 
 ## 8. Recommendation
 
-1. **Cheapest, highest-value experiment (≈45 min of CPU):** `train_real.py
-   --pretrained --model mobilenet_v3_small` on the existing split, then
-   `evaluate_real.py` + `onnx_export.py`. If it lands near 88–90 %, the report's
-   "from scratch" limitation becomes a measured ablation instead of a caveat.
-2. **If more accuracy is needed:** repeat with `--model efficientnet_b0`. Both are
-   already in the model factory; no new dependency.
-3. **If the goal is to beat the 6-class vocabulary, not the accuracy:** evaluate
-   `prithivMLmods/Trash-Net` (SigLIP2, same class names) or the 30-class CLIP
-   fine-tune on our split. Requires `transformers` + ~350 MB of weights — fine on a
-   laptop demo, heavy for the Pi; export to ONNX and measure before committing.
-4. **Do not** start with detection or segmentation. Our frame has one object; the
-   routing logic already handles ambiguity through the confidence threshold.
+**Ship what we have.** For this project — a single item in front of a fixed camera,
+onnxruntime on a Pi-class CPU, 2,527 training images, no GPU — the best deployable
+model is the one that is already in the repository: **MobileNetV3-Small, 128 px,
+trained from scratch, exported to 1.7 MB int8 ONNX**, at 78.7 % top-1 and 94.9 %
+routing, 30.6 ms per image. Nothing in the shortlist above beats it *at equal
+deployment cost*: the 96 % SigLIP2 checkpoint is 92.9 M parameters, and the honest
+RealWaste ceiling for any conventional model is ~89 %.
+
+Ranked by value per hour spent, on our own evidence:
+
+1. **Do nothing to the architecture.** §7.1 shows the 160 px + MixUp + EMA run buys
+   +1.4 pp at p = 0.49 and doubles the artefact. Report it as an ablation; do not
+   ship it.
+2. **The only lever with a known large payoff is ImageNet initialisation**
+   (≈ +10 pp by §7). It is one command, it needs a machine with internet, and it is
+   already wired up:
+   `python smart_bin/train_real.py --pretrained --name bingenie_pretrained`.
+   Re-export, re-evaluate, re-run `tools/eval_onnx.py --sweep` to re-pick the
+   threshold, and swap the artefacts only if `tools/compare_runs.py` clears p < 0.05.
+3. **If the vocabulary is the real complaint** (our `trash` class has 91 training
+   images), the move is not a bigger model but a better taxonomy: the 30-class CLIP
+   fine-tune or a RealWaste-trained 9-class head. That is a data-collection project
+   as much as a modelling one.
+4. **Do not** start with detection or segmentation. Our frame holds one object and
+   the confidence threshold already handles ambiguity; detectors would add an
+   annotation problem to a labelling problem we have not solved.
 
 Every candidate must be scored with the same script and the same 431 images before
 any of it goes in the report:
 
 ```bash
-python smart_bin/train_real.py --pretrained --name bingenie_pretrained
-python smart_bin/evaluate_real.py --run smart_bin/runs/bingenie_pretrained
-python smart_bin/onnx_export.py --checkpoint smart_bin/runs/bingenie_pretrained/best.pt --int8
-python tools/verify_deployment.py --onnx smart_bin/runs/bingenie_pretrained/*_int8.onnx --compare
+python smart_bin/evaluate_real.py --run smart_bin/runs/<name> --split test --tta --sweep
+python tools/compare_runs.py --baseline bingenie_mnv3s_128 --candidate <name> --tta --threshold <tuned>
+python smart_bin/onnx_export.py --checkpoint smart_bin/runs/<name>/best.pt --int8
+python tools/eval_onnx.py --run <name> --split test --threshold <tuned> --tta
 ```
 
 ---

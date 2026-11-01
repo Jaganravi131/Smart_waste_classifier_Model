@@ -1,0 +1,19 @@
+{
+  "images": 431,
+  "threshold": 0.3,
+  "tta": false,
+  "top1_accuracy": 0.7865,
+  "routing_accuracy_streams": 0.9513,
+  "residual_rate": 0.0023,
+  "coverage": 0.9977,
+  "mean_confidence": 0.8215,
+  "latency_ms_per_image": 26.2,
+  "per_class_recall": {
+    "cardboard": 0.8286,
+    "glass": 0.7805,
+    "metal": 0.75,
+    "paper": 0.8519,
+    "plastic": 0.7973,
+    "trash": 0.5172
+  }
+}
