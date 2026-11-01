@@ -9,6 +9,7 @@ smart_bin/runs/**
 # curves and a confusion matrix, and those cannot live only on one laptop.
 !smart_bin/runs/
 !smart_bin/runs/**/
+!smart_bin/runs/README.md
 !smart_bin/runs/**/summary.json
 !smart_bin/runs/**/history.json
 !smart_bin/runs/**/metrics_*.json
