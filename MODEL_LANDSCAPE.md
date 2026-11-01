@@ -1,0 +1,203 @@
+# Waste-detection models that already exist — landscape and shortlist
+
+*Compiled 1 November 2026 for the BinGenie project. Every number below is quoted
+from the source named next to it; nothing here was measured in this repository
+except where it says "this repo".*
+
+---
+
+## 0. Read this before comparing any two numbers
+
+Waste-model papers report accuracies on **different splits of different datasets**,
+and several of the highest published figures are inflated by near-duplicates and
+augment-before-split leakage:
+
+* TrashNet has documented near-duplicate photographs; grouping by perceptual hash
+  before splitting cost one independent reimplementation several points, and its
+  authors state plainly that "accuracy on TrashNet may be somewhat optimistic"
+  ([leakage-aware benchmark](https://github.com/kang-prayit/n1-trustworthy-waste-classification),
+  [EcoVision](https://github.com/kashifabrar24/EcoVision)).
+* RealWaste's authors showed the same models score **89.19 %** on real landfill
+  photographs but only **49.69 %** when trained on pristine studio material and
+  tested in the real environment ([RealWaste, *Informatics* 14(12):633](https://www.mdpi.com/2078-2489/14/12/633)).
+* In industrial cluttered scenes the absolute numbers collapse: Mask R-CNN gets
+  **22.8 AP** on ZeroWaste versus 87.2 mAP on a curated set
+  ([ZeroWaste](https://ar5iv.labs.arxiv.org/html/2106.02740),
+  [review](https://www.researchgate.net/publication/395049831_A_Review_of_Computer_Vision_for_Industrial-Grade_Waste_Classification)).
+
+**Therefore: the only comparison that matters for this project is a candidate model
+scored on our own 431-image held-out split with `tools/verify_deployment.py`.**
+The list below is for shortlisting, not for quoting.
+
+---
+
+## 1. Shortlist (ranked for *this* project)
+
+| # | Model | Task | Reported score (source) | Params | Weights | Why it is on the list |
+|---|---|---|---|---|---|---|
+| 1 | **ImageNet-pretrained MobileNetV3-Small / MobileNetV2**, fine-tuned | 6-class classifier | 88.7 – 91.0 % test on TrashNet, leakage-aware splits ([1](https://github.com/Zaidranjha095/waste-image-classification), [2](https://github.com/samarth1234-dev/trashnet-ai), [3](https://github.com/kashifabrar24/EcoVision)) | 1.5 – 3.5 M | torchvision (already installed) | Same architecture we ship, same pre-processing, **one flag away** (`train_real.py --pretrained`). The cheapest ~10 pp in the whole list. |
+| 2 | **EfficientNet-B0**, fine-tuned | 6-class classifier | 92 % test, weighted F1 0.92 on TrashNet ([JTRSS comparison](https://journal.umk.edu.my/index.php/jtrss/article/download/2492/1364/11526)) | 5.3 M | torchvision | Beats ResNet-18 (90 %) under an identical protocol; still CPU-friendly, exports to ONNX cleanly. |
+| 3 | **Trash-Net** — SigLIP2-base fine-tune | 6-class classifier | 96.26 % accuracy / 0.957 macro-F1 on 5,054 eval images ([model card](https://huggingface.co/prithivMLmods/Trash-Net)) | 92.9 M | 🤗 `prithivMLmods/Trash-Net` | Same six class names as ours, so it drops straight into our routing table — the fastest way to test whether a vision-language backbone beats a from-scratch CNN. |
+| 4 | **Augmented-Waste-Classifier-SigLIP2** | 10-class classifier | 99.26 % on 38,686 images ([model card](https://huggingface.co/prithivMLmods/Augmented-Waste-Classifier-SigLIP2)) | ~93 M | 🤗 Apache-2.0 | Adds biological / battery / clothes / shoes — closer to the four *physical* streams than TrashNet is. Treat 99.26 % as an augmented-set upper bound. |
+| 5 | **YOLO26n + our classifier on the crop** | detection then classify | COCO mAP50-95 40.9, 38.9 ms CPU ONNX ([Ultralytics](https://docs.ultralytics.com/compare/yolo26-vs-yolo11)) | 2.4 M | Ultralytics | Needed only if the bin must handle *several* items or heavy clutter per frame. Newer and ~30 % faster on CPU than YOLO11n. |
+| 6 | **YOLOv8m, 11 waste classes**, released weights | detection | val mAP50 **0.789**, test mAP50 **0.761** ([release](https://github.com/Santanu12-paria/AI-Waste-Detection/releases/tag/v1.0)) | 25.9 M | GitHub release | One of the few *waste* detectors with weights actually published and a test-split number. |
+| 7 | **YOLOv8s on TACO** | detection, 18–60 classes | mAP50 0.67, mAP50-95 0.45 ([project](https://github.com/AssadUllahKhan/Object-Detection-For-Waste-Management-Project)) | 11.2 M | repo weights / retrain | Real in-the-wild litter, many classes; useful as a *detector* upstream of a 4-stream router, not as a classifier. |
+| 8 | **OpenCLIP ViT-L/14-2B, zero-shot + prompt tuning** | 6-class classifier | 82.71 % zero-shot → **90.48 %** after prompt engineering ([Novelis / Waste Management](https://novelis.io/research-lab/a-comparative-analysis-of-vision-language-models-for-scalable-waste-recognition/)) | ~430 M | OpenCLIP | No training data needed. 430 M params is a laptop/edge-GPU proposition, not a Pi one. |
+| 9 | **ConvNeXt-Tiny / ConvNeXt-Large**, fine-tuned | 6-class classifier | 85 % / 93 % on TrashNet ([MDPI ensemble study](https://www.mdpi.com/2071-1050/18/1/24)) | 28 M / 198 M | torchvision | Largest single-model gains in that study; a weighted ensemble reached 96 %. |
+| 10 | **Mask R-CNN / YOLO on ZeroWaste** | instance segmentation | 22.8–30 AP (Mask R-CNN), **51.6 mAP** current SOTA ([ZeroWaste](https://ar5iv.labs.arxiv.org/html/2106.02740), [2025 baseline](https://arxiv.org/pdf/2508.18799)) | 44 M+ | detectron2 / Ultralytics | Only relevant if the arm must grab a specific object off a belt. Whole different project. |
+
+Everything above is *downloadable*. Section 6 covers the commercial systems that
+are better than all of them but cannot be installed.
+
+---
+
+## 2. Ready-to-use classifiers on the Hugging Face Hub
+
+All of these are `transformers`-loadable in five lines, which matters because it
+means no training run at all to get a baseline.
+
+| Model | Backbone | Classes | Reported accuracy | Eval size | Licence | Notes |
+|---|---|---|---|---|---|---|
+| [`prithivMLmods/Trash-Net`](https://huggingface.co/prithivMLmods/Trash-Net) | SigLIP2-base-p16-224 | 6 (TrashNet names) | **96.26 %**, macro-F1 0.957 | 5,054 | check card | Per-class F1 0.91–0.98; `trash` weakest (0.914) — same failure mode as ours |
+| [`prithivMLmods/Augmented-Waste-Classifier-SigLIP2`](https://huggingface.co/prithivMLmods/Augmented-Waste-Classifier-SigLIP2) | SigLIP2-base-p16-224 | 10 | 99.26 % | 38,686 | Apache-2.0 | Heavily augmented set — upper bound, not field accuracy |
+| [`ysfad/openclip-finetune-waste`](https://huggingface.co/ysfad/openclip-finetune-waste) | CLIP ViT-B/16 (laion2b) | **30** fine-grained (aerosol cans, glass jars, …) | 91.33 % val | 15,000 (70/10/20) | check card | Most useful *vocabulary*: maps to recycling streams far better than 6 coarse classes |
+| [`yangy50/garbage-classification`](https://huggingface.co/yangy50/garbage-classification) | ViT-base-p16-224 | 6 | 95 % (self-reported, 2,467 imgs) | small | AFL-3.0 | The original open ViT on the Kaggle garbage set; treat 95 % with suspicion |
+| [`watersplash/waste-classification`](https://huggingface.co/watersplash/waste-classification) | ViT (85.8 M) | 6 | not stated | — | check card | Fine-tune of the above |
+| [`hmrizal/recycled_waste_classification`](https://huggingface.co/hmrizal/recycled_waste_classification) | ViT-base-p16-224 | recycled set | 80.23 % | ~3 k | check card | Realistic number for a plain 5-epoch fine-tune |
+| [`Giecom/…-vit-model-clasification-waste`](https://huggingface.co/Giecom/giecom-vit-model-clasification-waste) | ViT-base | recycled (3.1 k) | 99.74 % | 3.1 k | check card | Textbook leakage: 99.74 % on a 3 k set with no held-out protocol — cited only as a caution |
+| [`reyhanwiira/…-vgg-realwaste`](https://huggingface.co/reyhanwiira/eunoiawiira-vgg-realwaste-classification) | VGG16 | 9 (RealWaste) | 83.65 % | RealWaste | check card | Real-life photos, not studio |
+
+**Practical caveat:** none of these was trained on *our* split, and SigLIP2/CLIP
+models pre-process at 224 px with their own normalisation — the routing accuracy
+they produce in our app has to be measured, not assumed.
+
+---
+
+## 3. Object detectors (when one image holds several items)
+
+| Model | Dataset | Score | Weights |
+|---|---|---|---|
+| YOLOv8m, 11 waste classes | custom waste set | mAP50 0.789 val / **0.761 test** | [released `best.pt`](https://github.com/Santanu12-paria/AI-Waste-Detection/releases/tag/v1.0) |
+| YOLOv8s | TACO (60 litter categories, often collapsed to ~18) | mAP50 0.67, mAP50-95 0.45 | [repo](https://github.com/AssadUllahKhan/Object-Detection-For-Waste-Management-Project) |
+| YOLOv8 + TACO | TACO | train/infer scripts + run weights | [jeremy-rico/litter-detection](https://github.com/jeremy-rico/litter-detection) |
+| YOLO26n / YOLO11n | COCO (backbone only) | mAP50-95 40.9 / 39.5; 38.9 / 56.1 ms CPU | Ultralytics, `yolo26n.pt` |
+| Faster R-CNN / YOLOv5 / YOLOv8 comparison | Roboflow "Garbage Classification 3" (7 classes) | side-by-side mAP, FPS, latency | [repo](https://github.com/GhadaElfeki77/Garbage-Object-Detection) |
+
+Detection is the right answer only if the frame can contain more than one object.
+For a single item presented to a bin, detection adds a failure mode (missed box)
+without adding routing accuracy.
+
+---
+
+## 4. Segmentation (robot picking off a conveyor)
+
+| Model | Dataset | Score |
+|---|---|---|
+| SPDA-SAM (ViT-B, 2026) | ZeroWaste test | **34.4 mAP** |
+| USIS-SAM (ViT-H) | ZeroWaste test | 33.8 mAP |
+| Mask R-CNN (R-50) | ZeroWaste test | 29.0 mAP |
+| Mask R-CNN / TridentNet / RetinaNet | ZeroWaste-f (authors' baselines) | 22.8 / 21.0 AP |
+| Semi-supervised YOLO11 + RT-DETR ensemble | ZeroWaste-f | **51.6 mAP** (2025 state of the art) |
+
+Sources: [SOTA2 leaderboard](https://www.sota2.com/research/sota/instance-segmentation-on-zerowaste-test),
+[ZeroWaste paper](https://ar5iv.labs.arxiv.org/html/2106.02740),
+[Robust and Label-Efficient Deep Waste Detection](https://arxiv.org/pdf/2508.18799).
+
+The lesson here is not "use ZeroWaste", it is "cluttered real scenes are 20–50 mAP,
+not 90 % accuracy" — which is why the report should never compare a TrashNet
+accuracy with a field deployment figure.
+
+---
+
+## 5. Zero-shot / vision-language models
+
+| Approach | Score on waste | Comment |
+|---|---|---|
+| CLIP RN50, zero-shot | 72.93 % | [Waste Management 2025](https://www.sciencedirect.com/science/article/pii/S0956053X25003502) |
+| OpenCLIP ViT-L/14-2B, zero-shot | 82.71 % → **90.48 %** with engineered prompts | Prompt text matters more than the model here |
+| MetaCLIP ViT-H/14 | 84.96 % zero-shot, 97.74 % fully supervised | Best zero-shot of the compared family |
+| Open-vocabulary *detectors* (Grounding DINO, OWLv2, YOLO-World) on ZeroWaste | **mAP ≤ 7.3** zero-shot | [ZeroWaste OVOD benchmark](https://arxiv.org/pdf/2508.18799) — do not expect open-vocabulary detection to work on a bin |
+
+Vision-language models are attractive for one specific reason: they need no
+training data, so the ~1,768-image ceiling stops applying. They are unattractive
+for a Raspberry-Pi-class bin because of the compute.
+
+---
+
+## 6. Commercial systems (better, not installable)
+
+Worth one paragraph in the report for context, not more:
+
+* **Greyparrot** (UK) — waste-monitoring AI for conveyor belts.
+* **AMP Robotics** (US) — vision-guided robotic sorters used in material recovery
+  facilities.
+* **CleanRobotics TrashBot** (US) — a sorting bin with camera plus sensors, the
+  closest commercial form factor to BinGenie.
+
+None of them publishes weights or evaluation data; the published numbers are
+vendor claims, which is exactly why the industrial ZeroWaste benchmark in §4
+exists. Cite them as context for "this is a solved problem commercially", never as
+a comparison baseline.
+
+---
+
+## 7. What is different about *our* numbers
+
+Measured in this repository (2 CPU cores, held-out 431-image TrashNet test split,
+`metrics_test.json`): **78.89 % top-1 / 94.90 % routing, trained from scratch**.
+
+| Same dataset, different protocol | Test accuracy |
+|---|---|
+| MobileNetV3-Small, **from scratch** (this repo) | 78.89 % |
+| MobileNetV2, ImageNet init, pHash-grouped split | 89.71 % [86.54, 92.61] |
+| MobileNetV2, ImageNet init, 1768/379/380 split | 88.68 % |
+| MobileNetV3-Small + augmentation, 70/15/15 | 91.03 % |
+| EfficientNet-B0, ImageNet init, same protocol as ResNet-18 | 92.00 % |
+
+That table is the single most useful thing in this document: **about ten points of
+our gap is the missing ImageNet initialisation, not the architecture.** It also
+means switching to a bigger model without changing the initialisation policy would
+buy much less than the papers imply.
+
+---
+
+## 8. Recommendation
+
+1. **Cheapest, highest-value experiment (≈45 min of CPU):** `train_real.py
+   --pretrained --model mobilenet_v3_small` on the existing split, then
+   `evaluate_real.py` + `onnx_export.py`. If it lands near 88–90 %, the report's
+   "from scratch" limitation becomes a measured ablation instead of a caveat.
+2. **If more accuracy is needed:** repeat with `--model efficientnet_b0`. Both are
+   already in the model factory; no new dependency.
+3. **If the goal is to beat the 6-class vocabulary, not the accuracy:** evaluate
+   `prithivMLmods/Trash-Net` (SigLIP2, same class names) or the 30-class CLIP
+   fine-tune on our split. Requires `transformers` + ~350 MB of weights — fine on a
+   laptop demo, heavy for the Pi; export to ONNX and measure before committing.
+4. **Do not** start with detection or segmentation. Our frame has one object; the
+   routing logic already handles ambiguity through the confidence threshold.
+
+Every candidate must be scored with the same script and the same 431 images before
+any of it goes in the report:
+
+```bash
+python smart_bin/train_real.py --pretrained --name bingenie_pretrained
+python smart_bin/evaluate_real.py --run smart_bin/runs/bingenie_pretrained
+python smart_bin/onnx_export.py --checkpoint smart_bin/runs/bingenie_pretrained/best.pt --int8
+python tools/verify_deployment.py --onnx smart_bin/runs/bingenie_pretrained/*_int8.onnx --compare
+```
+
+---
+
+## 9. Reference list
+
+**Datasets** — TrashNet (2,527 imgs, 6 classes, MIT) · RealWaste (4,752 imgs,
+9 classes, UCI 908; licence stated as CC BY 4.0 by UCI and CC BY-NC-SA 4.0 by the
+authors — resolve before use) · TrashBox (17,785 imgs, 7 classes incl. medical and
+e-waste) · TACO (in-the-wild litter, 60 fine classes) · ZeroWaste (1,752 imgs,
+4 classes, industrial MRF) · Kaggle *Waste Classification* (organic/recyclable).
+
+**Papers** — RealWaste, *Informatics* 2023 · ZeroWaste, CVPR 2021 ·
+Robust and Label-Efficient Deep Waste Detection, BMVC 2025 ·
+A Systematic Review of AI-Based Techniques for Automated Waste Classification,
+*Sensors* 25(10):3181 · A Review of Computer Vision for Industrial-Grade Waste
+Classification, 2025 · TrashBox, FRUCT 2022.
